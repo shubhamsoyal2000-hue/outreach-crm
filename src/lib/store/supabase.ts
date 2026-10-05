@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env } from "../config";
-import { emailDomain } from "../email-rules";
+import { domainAndParents, emailDomain } from "../email-rules";
 import type { Company, Contact, DueItem, Enrollment, Inbox, SequenceStep, Settings, VerificationStatus } from "../types";
 import type { NewEnrollment, NewMessage, Store } from "./types";
 
@@ -102,7 +102,7 @@ export class SupabaseStore implements Store {
   async isSuppressed(email: string) {
     const byEmail = check(await db().from("suppressions").select("id").eq("email", email).limit(1), "suppression");
     if (byEmail?.length) return true;
-    const byDomain = check(await db().from("suppressions").select("id").eq("domain", emailDomain(email)).limit(1), "suppression");
+    const byDomain = check(await db().from("suppressions").select("id").in("domain", domainAndParents(emailDomain(email))).limit(1), "suppression");
     return !!byDomain?.length;
   }
 

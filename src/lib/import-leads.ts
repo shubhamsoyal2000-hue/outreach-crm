@@ -1,5 +1,6 @@
 import "server-only";
 import type { LeadRow, Rejected } from "./csv-import";
+import { domainAndParents } from "./email-rules";
 import { db } from "./store/supabase";
 
 export interface ImportSummary {
@@ -21,7 +22,7 @@ export async function saveLeads(rows: LeadRow[], rejected: Rejected[], source: s
   for (let i = 0; i < rows.length; i += CHUNK) {
     let chunk = rows.slice(i, i + CHUNK);
     const emails = chunk.map((r) => r.email);
-    const domains = [...new Set(chunk.map((r) => r.email.split("@")[1]))];
+    const domains = [...new Set(chunk.flatMap((r) => domainAndParents(r.email.split("@")[1])))];
 
     const [supEmails, supDomains, existing] = await Promise.all([
       db().from("suppressions").select("email").in("email", emails),
@@ -34,7 +35,7 @@ export async function saveLeads(rows: LeadRow[], rejected: Rejected[], source: s
     const known = new Set((existing.data ?? []).map((c) => c.email));
 
     chunk = chunk.filter((r) => {
-      if (blocked.has(r.email) || blockedDomains.has(r.email.split("@")[1])) {
+      if (blocked.has(r.email) || domainAndParents(r.email.split("@")[1]).some((d) => blockedDomains.has(d))) {
         summary.rejected.push({ line: r.line, email: r.email, reason: "opted out or bounced before" });
         return false;
       }

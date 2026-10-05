@@ -18,6 +18,14 @@ export function emailDomain(email: string): string {
   return email.slice(email.lastIndexOf("@") + 1);
 }
 
+/** "cc.us.dsv.com" -> ["cc.us.dsv.com", "us.dsv.com", "dsv.com"], so blocking dsv.com covers its subdomains. */
+export function domainAndParents(domain: string): string[] {
+  const parts = domain.split(".");
+  const out: string[] = [];
+  for (let i = 0; i <= parts.length - 2; i++) out.push(parts.slice(i).join("."));
+  return out;
+}
+
 /** Shared business inboxes (info@, sales@...). Skipped unless Settings allows them: they reply, but get more spam reports. */
 const SHARED_LOCAL_PARTS = new Set([
   "info", "sales", "support", "contact", "admin", "office", "hello", "help", "service",

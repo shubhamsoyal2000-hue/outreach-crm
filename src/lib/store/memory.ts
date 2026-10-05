@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { emailDomain } from "../email-rules";
+import { domainAndParents, emailDomain } from "../email-rules";
 import type { Company, Contact, DueItem, Enrollment, Inbox, SequenceStep, Settings, VerificationStatus } from "../types";
 import type { EnrollCandidate, NewEnrollment, NewMessage, Store } from "./types";
 
@@ -84,8 +84,8 @@ export class MemoryStore implements Store {
   }
 
   async isSuppressed(email: string) {
-    const domain = emailDomain(email);
-    return this.suppressions.some((s) => s.email === email || s.domain === domain);
+    const domains = domainAndParents(emailDomain(email));
+    return this.suppressions.some((s) => s.email === email || (!!s.domain && domains.includes(s.domain)));
   }
 
   async companyFirstTouchOnDay(companyId: string, sendDay: string) {

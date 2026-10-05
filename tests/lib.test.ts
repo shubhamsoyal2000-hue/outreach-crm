@@ -147,3 +147,16 @@ describe("shared inboxes setting", () => {
     expect(precheck("careers@acme.com", { allowShared: true })).toEqual({ ok: false, reason: "role" });
   });
 });
+
+describe("domain blocking", () => {
+  it("covers subdomains", async () => {
+    const { domainAndParents } = await import("../src/lib/email-rules");
+    expect(domainAndParents("cc.us.dsv.com")).toEqual(["cc.us.dsv.com", "us.dsv.com", "dsv.com"]);
+    expect(domainAndParents("dhl.com")).toEqual(["dhl.com"]);
+    const { MemoryStore } = await import("../src/lib/store/memory");
+    const store = new MemoryStore();
+    await store.addSuppression({ domain: "dsv.com", reason: "manual" });
+    expect(await store.isSuppressed("info@cc.us.dsv.com")).toBe(true);
+    expect(await store.isSuppressed("ann@notdsv.com")).toBe(false);
+  });
+});
