@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 function b64url(buf: Buffer): string {
   return buf.toString("base64url");
@@ -26,10 +26,10 @@ export function unsign(secret: string, token: string): string | null {
   return safeEqual(token.slice(i + 1), hmac(secret, value)) ? value : null;
 }
 
+/** Any long random string works: it is hashed to a 32-byte key. */
 function keyFrom(secret: string): Buffer {
-  const key = Buffer.from(secret, "base64");
-  if (key.length !== 32) throw new Error("ENCRYPTION_KEY must be 32 bytes, base64 encoded (openssl rand -base64 32)");
-  return key;
+  if (secret.length < 24) throw new Error("ENCRYPTION_KEY must be a random string of at least 24 characters");
+  return createHash("sha256").update(secret).digest();
 }
 
 /** AES-256-GCM. Output: iv.tag.ciphertext, each base64url. */
