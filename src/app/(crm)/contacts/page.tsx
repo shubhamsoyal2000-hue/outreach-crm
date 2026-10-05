@@ -1,4 +1,5 @@
 import { Badge, Flash, Stat } from "@/components/ui";
+import { collectorBookmarklet } from "@/lib/importinfo/collector";
 import { db } from "@/lib/store/supabase";
 import { importCsv, setCompanyDoNotContact } from "../../actions";
 
@@ -42,6 +43,24 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
             <div style={{ flex: "0 0 auto" }}><button type="submit">Import</button></div>
           </div>
         </form>
+      </div>
+
+      <div className="panel">
+        <h2>Collect leads from ImportInfo</h2>
+        <ol className="small">
+          <li>Drag this button to your browser&apos;s bookmarks bar:{" "}
+            {/* React blocks javascript: links, so this one is plain HTML. */}
+            <span dangerouslySetInnerHTML={{ __html: `<a class="button" href="${collectorBookmarklet()}" title="Drag me to your bookmarks bar">+ Add to CRM list</a>` }} />
+          </li>
+          <li>On importinfo.com, open a company page that lists email addresses and click the bookmark. It adds that page&apos;s emails to a list saved in your browser, fixing broken ones like &ldquo;ops expeditors.com&rdquo;.</li>
+          <li>Repeat on as many pages as you like, then click <strong>Download CSV</strong> in the box it shows and import the file above.</li>
+        </ol>
+        <p className="small muted">
+          Each lead also gets the company&apos;s shipment facts, ready to use in emails with a fallback after the bar:{" "}
+          <code>{"{{top_us_port|your port}}"}</code>, <code>{"{{top_route_from}}"}</code>, <code>{"{{top_route_to}}"}</code>,{" "}
+          <code>{"{{shipments_90d}}"}</code>, <code>{"{{shipments_year}}"}</code>, <code>{"{{last_shipment}}"}</code>. The state sets the
+          send-time zone.
+        </p>
       </div>
 
       <div className="panel">
