@@ -83,7 +83,31 @@ export const COLLECTOR_SOURCE = String.raw`(function () {
       FACTS.forEach(function (k) { lead[k] = facts[k] || ""; });
       leads.push(lead);
     });
+    var junk = cutOffCopies(leads.map(function (l) { return l.email; }));
+    leads = leads.filter(function (l) {
+      if (!junk[l.email]) return true;
+      skipped.push({ raw: l.email, reason: "cut-off copy of " + junk[l.email] });
+      return false;
+    });
     return { leads: leads, skipped: skipped };
+  }
+
+  /* Bills of lading often clip or prefix an address: "mazon.cgd.doc@" next to "amazon.cgd.doc@",
+     "08854.david@" next to "david@". Returns { badEmail: goodEmail } for those. */
+  function cutOffCopies(emails) {
+    var out = {};
+    emails.forEach(function (a) {
+      var la = a.split("@")[0], da = a.split("@")[1];
+      emails.forEach(function (b) {
+        if (a === b || out[a]) return;
+        var lb = b.split("@")[0], db = b.split("@")[1];
+        if (da !== db) return;
+        var clipped = lb.length > la.length && lb.slice(-la.length) === la && /^[a-z0-9]{1,2}$/.test(lb.slice(0, lb.length - la.length));
+        var prefixed = /^\d+[._-]/.test(la) && la.replace(/^\d+[._-]/, "") === lb;
+        if (clipped || prefixed) out[a] = b;
+      });
+    });
+    return out;
   }
 
   var COLUMNS = ["email", "first_name", "last_name", "company", "website"].concat(FACTS, ["email_records", "email_last_seen", "email_repaired", "importinfo_page"]);

@@ -69,6 +69,15 @@ describe("ImportInfo collector", () => {
     expect(skipped.map((s) => s.reason)).toEqual(["broken address", "no-reply address"]);
   });
 
+  it("drops clipped and zip-prefixed copies seen on real pages", () => {
+    const { leads, skipped } = api().collectFromRows("Amity", [
+      { raw: "david@amitygl.com" }, { raw: "08854.david@amitygl.com" }, { raw: "8854.david@amitygl.com" },
+      { raw: "amazon.cgd.doc@lns.maersk.com" }, { raw: "mazon.cgd.doc@lns.maersk.com" }, { raw: "ops@amitygl.com" },
+    ]);
+    expect(leads.map((l) => l.email)).toEqual(["david@amitygl.com", "amazon.cgd.doc@lns.maersk.com", "ops@amitygl.com"]);
+    expect(skipped.map((s) => s.raw)).toEqual(["08854.david@amitygl.com", "8854.david@amitygl.com", "mazon.cgd.doc@lns.maersk.com"]);
+  });
+
   it("merges without duplicates across pages", () => {
     const a = api();
     const list = a.collectFromRows("Acme", [{ raw: "ann.lee@acme.com" }]).leads;
