@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: Settings = {
   company_name: "",
   postal_address: "",
   opt_out_line: "Not the right person or not interested? Click here and I won't email again:",
+  allow_shared_inboxes: false,
   default_timezone: "America/New_York",
   send_window_start_hour: 9,
   send_window_end_hour: 16,

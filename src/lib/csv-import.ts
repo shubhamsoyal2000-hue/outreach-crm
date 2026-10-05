@@ -51,7 +51,7 @@ function buildHeaderMap(headers: string[]) {
   return map;
 }
 
-export function parseLeadsCsv(text: string): { rows: LeadRow[]; rejected: Rejected[]; columns: string[] } {
+export function parseLeadsCsv(text: string, opts: { allowShared?: boolean } = {}): { rows: LeadRow[]; rejected: Rejected[]; columns: string[] } {
   const parsed = Papa.parse<Record<string, string>>(text.replace(/^﻿/, ""), { header: true, skipEmptyLines: "greedy" });
   const headers = parsed.meta.fields ?? [];
   const map = buildHeaderMap(headers);
@@ -66,7 +66,7 @@ export function parseLeadsCsv(text: string): { rows: LeadRow[]; rejected: Reject
 
     const email = normalizeEmail(rec.email ?? "");
     if (!email) return rejected.push({ line, email: "", reason: "no email" });
-    const pre = precheck(email);
+    const pre = precheck(email, opts);
     if (!pre.ok) return rejected.push({ line, email, reason: pre.reason === "role" ? "shared mailbox (info@, sales@...)" : pre.reason === "syntax" ? "not a valid email" : "disposable domain" });
     if (seen.has(email)) return rejected.push({ line, email, reason: "duplicate in this file" });
     seen.add(email);

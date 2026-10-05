@@ -66,6 +66,7 @@ export async function saveSettings(fd: FormData) {
       company_name: str(fd, "company_name"),
       postal_address: str(fd, "postal_address"),
       opt_out_line: str(fd, "opt_out_line") || "Not the right person or not interested? Click here and I won't email again:",
+      allow_shared_inboxes: str(fd, "allow_shared_inboxes") === "1",
       default_timezone: str(fd, "default_timezone") || "America/New_York",
       send_window_start_hour: start,
       send_window_end_hour: end,
@@ -119,7 +120,8 @@ export async function importCsv(fd: FormData) {
   const file = fd.get("file");
   if (!(file instanceof File) || file.size === 0) done("/contacts", "Choose a CSV file first.");
   const text = await (file as File).text();
-  const { rows, rejected } = parseLeadsCsv(text);
+  const settings = await new SupabaseStore().getSettings();
+  const { rows, rejected } = parseLeadsCsv(text, { allowShared: settings.allow_shared_inboxes });
   const summary = await saveLeads(rows, rejected, `csv:${(file as File).name}`);
   const reasons = Object.entries(
     summary.rejected.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r.reason]: (acc[r.reason] ?? 0) + 1 }), {}),
@@ -139,54 +141,68 @@ export async function setCompanyDoNotContact(fd: FormData) {
 
 // ---- Suppression ----
 
+/** One entry per line (or comma separated): emails, domains or website addresses. */
 export async function addSuppression(fd: FormData) {
-  const value = str(fd, "value").toLowerCase();
+  const entries = str(fd, "value").split(/[\n,;]+/).map((v) => v.trim().toLowerCase()).filter(Boolean);
+  if (!entries.length) done("/suppressions", "Enter at least one email address or domain.");
+  const note = str(fd, "note") || undefined;
   const store = new SupabaseStore();
-  if (value.includes("@")) {
-    const email = normalizeEmail(value);
-    if (!isValidSyntax(email)) done("/suppressions", "That is not a valid email address.");
-    await store.addSuppression({ email, reason: "manual", note: str(fd, "note") || undefined });
-    const contact = await store.findContactByEmail(email);
-    if (contact) await store.stopContactEnrollments(contact.id, "suppressed");
-  } else {
-    const domain = domainFromWebsite(value);
-    if (!domain) done("/suppressions", "Enter an email address or a domain like acme.com.");
-    await store.addSuppression({ domain: domain!, reason: "manual", note: str(fd, "note") || undefined });
+  const added: string[] = [];
+  const unusable: string[] = [];
+  for (const value of entries) {
+    if (value.includes("@")) {
+      const email = normalizeEmail(value);
+      if (!isValidSyntax(email)) { unusable.push(value); continue; }
+      await store.addSuppression({ email, reason: "manual", note });
+      const contact = await store.findContactByEmail(email);
+      if (contact) await store.stopContactEnrollments(contact.id, "suppressed");
+      added.push(email);
+    } else {
+      const domain = domainFromWebsite(value);
+      if (!domain) { unusable.push(value); continue; }
+      await store.addSuppression({ domain, reason: "manual", note });
+      added.push(domain);
+    }
   }
-  done("/suppressions", `${value} will never be emailed.`);
+  done(
+    "/suppressions",
+    (added.length ? `${added.length} added: they will never be emailed.` : "Nothing added.") +
+      (unusable.length ? ` Not added (need an email or a website like acme.com): ${unusable.slice(0, 10).join(", ")}${unusable.length > 10 ? "..." : ""}.` : ""),
+  );
 }
 
 // ---- Sequences ----
 
+// Uses the fields the ImportInfo collector fills in, each with a fallback so a lead missing one still gets a sensible email.
 const DEFAULT_STEPS = [
   {
     step_number: 1,
     delay_business_days: 0,
-    subject_a: "{{commodity}} into {{port}}",
-    subject_b: "question about your {{port}} freight",
+    subject_a: "trucks out of {{top_us_port|the port}}",
+    subject_b: "{{top_route_from|import}} containers into {{top_us_port|your port}}",
     body:
-      "Hi {{first_name}},\n\nI saw {{company}} has been bringing {{commodity}} in through {{port}}. We move inbound containers from US ports to warehouses across the country, FTL and drayage, and we usually beat the incumbent rate on the first lane we quote.\n\nWould it be worth sending one lane over for a quick comparison quote?",
+      "Hi {{first_name|there}},\n\nI saw {{company|your team}} has containers coming from {{top_route_from|overseas}} into {{top_us_port|US ports}} regularly. We handle drayage and FTL from the port to warehouses across the country, and we usually beat the current rate on the first lane we quote.\n\nWould it be worth sending one lane over for a quick comparison quote?",
   },
   {
     step_number: 2,
     delay_business_days: 3,
     subject_a: null,
     subject_b: null,
-    body: "Hi {{first_name}}, just bringing this back up. If you share one lane and a typical weekly volume, I will send a rate within the day. No contract or commitment needed.",
+    body: "Hi {{first_name|there}}, just bringing this back up. If you share one lane and a typical weekly volume, I will send a rate within the day. No contract or commitment needed.",
   },
   {
     step_number: 3,
     delay_business_days: 4,
     subject_a: null,
     subject_b: null,
-    body: "{{first_name}}, is freight from {{port}} something you handle, or is there someone else at {{company}} I should ask?",
+    body: "Hi {{first_name|there}}, is trucking out of {{top_us_port|the port}} something you handle, or is there someone else at {{company|your company}} I should ask?",
   },
   {
     step_number: 4,
     delay_business_days: 7,
     subject_a: null,
     subject_b: null,
-    body: "Hi {{first_name}}, I will stop following up after this one. If capacity or rates out of {{port}} ever become a headache, reply with a lane and I will quote it the same day.",
+    body: "Hi {{first_name|there}}, I will stop following up after this one. If capacity or rates out of {{top_us_port|the port}} ever become a headache, reply with a lane and I will quote it the same day.",
   },
 ];
 

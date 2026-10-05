@@ -136,3 +136,14 @@ describe("session", () => {
     expect(isValidSession("secret", t, 15 * 86_400_000)).toBe(false);
   });
 });
+
+describe("shared inboxes setting", () => {
+  it("skips info@ and sales@ by default but allows them when Settings says so; no-reply stays blocked", async () => {
+    const { precheck } = await import("../src/lib/email-rules");
+    expect(precheck("info@acme.com")).toEqual({ ok: false, reason: "role" });
+    expect(precheck("info@acme.com", { allowShared: true })).toEqual({ ok: true });
+    expect(precheck("sales@acme.com", { allowShared: true })).toEqual({ ok: true });
+    expect(precheck("noreply@acme.com", { allowShared: true })).toEqual({ ok: false, reason: "role" });
+    expect(precheck("careers@acme.com", { allowShared: true })).toEqual({ ok: false, reason: "role" });
+  });
+});

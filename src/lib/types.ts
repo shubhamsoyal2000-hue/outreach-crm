@@ -12,6 +12,8 @@ export interface Settings {
   company_name: string;
   postal_address: string;
   opt_out_line: string;
+  /** Email info@, sales@ style shared inboxes (no-reply, abuse, hr... stay blocked). */
+  allow_shared_inboxes: boolean;
   default_timezone: string;
   send_window_start_hour: number;
   send_window_end_hour: number;

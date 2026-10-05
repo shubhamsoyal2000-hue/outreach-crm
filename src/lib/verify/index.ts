@@ -45,8 +45,8 @@ export function makeVerifier(provider: string | undefined, apiKey: string | unde
   const call = provider === "zerobounce" ? zeroBounce : provider === "millionverifier" ? millionVerifier : null;
   if (!call) throw new Error(`Unknown VERIFIER "${provider}". Use millionverifier or zerobounce.`);
   return {
-    async verify(email) {
-      const pre = precheck(email);
+    async verify(email, opts) {
+      const pre = precheck(email, opts);
       if (!pre.ok) return { status: pre.reason === "disposable" ? "disposable" : pre.reason === "role" ? "risky" : "invalid", detail: pre.reason };
       try {
         const mx = await resolveMx(emailDomain(email));

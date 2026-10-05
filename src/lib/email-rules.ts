@@ -18,18 +18,27 @@ export function emailDomain(email: string): string {
   return email.slice(email.lastIndexOf("@") + 1);
 }
 
-/** Shared mailboxes nobody personally owns. Cold email to these gets reported as spam. */
-const ROLE_LOCAL_PARTS = new Set([
+/** Shared business inboxes (info@, sales@...). Skipped unless Settings allows them: they reply, but get more spam reports. */
+const SHARED_LOCAL_PARTS = new Set([
   "info", "sales", "support", "contact", "admin", "office", "hello", "help", "service",
   "customerservice", "enquiries", "inquiries", "billing", "accounts", "accounting", "ap", "ar",
-  "hr", "jobs", "careers", "marketing", "media", "press", "webmaster", "postmaster", "abuse",
-  "noreply", "no-reply", "donotreply", "do-not-reply", "mail", "team", "orders", "general",
-  "reception", "privacy", "legal", "security", "spam", "root", "list", "newsletter",
+  "marketing", "mail", "team", "orders", "general", "reception",
 ]);
 
-export function isRoleAddress(email: string): boolean {
-  const local = email.slice(0, email.lastIndexOf("@")).split("+")[0];
-  return ROLE_LOCAL_PARTS.has(local);
+/** Mailboxes that never want sales email (no-reply, abuse, job applications...). Always skipped. */
+const NEVER_LOCAL_PARTS = new Set([
+  "hr", "jobs", "careers", "media", "press", "webmaster", "postmaster", "abuse", "noreply", "no-reply",
+  "donotreply", "do-not-reply", "privacy", "legal", "security", "spam", "root", "list", "newsletter",
+]);
+
+function localPart(email: string): string {
+  return email.slice(0, email.lastIndexOf("@")).split("+")[0];
+}
+
+/** True for shared inboxes that should be skipped, given whether Settings allows info@/sales@ style ones. */
+export function isRoleAddress(email: string, allowShared = false): boolean {
+  const local = localPart(email);
+  return NEVER_LOCAL_PARTS.has(local) || (!allowShared && SHARED_LOCAL_PARTS.has(local));
 }
 
 const DISPOSABLE_DOMAINS = new Set([
@@ -76,9 +85,9 @@ export function companyNameKey(name: string): string {
 
 export type PrecheckResult = { ok: true } | { ok: false; reason: "syntax" | "role" | "disposable" };
 
-export function precheck(email: string): PrecheckResult {
+export function precheck(email: string, opts: { allowShared?: boolean } = {}): PrecheckResult {
   if (!isValidSyntax(email)) return { ok: false, reason: "syntax" };
-  if (isRoleAddress(email)) return { ok: false, reason: "role" };
+  if (isRoleAddress(email, opts.allowShared)) return { ok: false, reason: "role" };
   if (isDisposableDomain(emailDomain(email))) return { ok: false, reason: "disposable" };
   return { ok: true };
 }

@@ -18,7 +18,7 @@ export default async function SuppressionsPage({ searchParams }: { searchParams:
           automatically. Add your existing customers&apos; domains so they never get cold email.
         </p>
         <form action={addSuppression} className="row">
-          <div><label>Email or domain</label><input type="text" name="value" placeholder="jane@acme.com or acme.com" required /></div>
+          <div><label>Emails or domains, one per line (pasting a list works)</label><textarea name="value" rows={4} placeholder={"acme.com\njane@example.com\nwww.bigshipper.com"} required /></div>
           <div><label>Note (optional)</label><input type="text" name="note" placeholder="existing customer" /></div>
           <div style={{ flex: "0 0 auto" }}><button type="submit">Add</button></div>
         </form>

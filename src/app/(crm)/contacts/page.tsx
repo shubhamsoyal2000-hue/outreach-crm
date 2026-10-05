@@ -34,7 +34,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
         <p className="muted small">
           One row per person. An <strong>email</strong> column is required. Name, title, company, website and state are recognised under common
           headings; every other column (commodity, port, HS code, shipments...) is kept and can be used in emails as {"{{column_name}}"}.
-          Shared mailboxes like info@ and sales@, duplicates, and anyone who opted out or bounced before are skipped automatically.
+          No-reply addresses, duplicates, and anyone who opted out or bounced before are skipped automatically, and so are shared inboxes like info@ unless Settings allows them.
           Keep each file under about 4 MB.
         </p>
         <form action={importCsv}>

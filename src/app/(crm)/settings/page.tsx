@@ -20,6 +20,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <label>Opt-out line (the unsubscribe link is added after it)</label>
         <input type="text" name="opt_out_line" defaultValue={s.opt_out_line} />
 
+        <h2 style={{ marginTop: 22 }}>Who to email</h2>
+        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input type="checkbox" name="allow_shared_inboxes" value="1" defaultChecked={s.allow_shared_inboxes} style={{ width: "auto" }} /> Email shared inboxes like
+          info@, sales@ and orders@
+        </label>
+        <p className="muted small">They do reply, but get more spam reports than a named person. No-reply, abuse, HR and job inboxes are always skipped.</p>
+
         <h2 style={{ marginTop: 22 }}>Sending window</h2>
         <p className="muted small">Hours in each recipient&apos;s own time zone (taken from their state), Monday to Friday, skipping US holidays.</p>
         <div className="row">

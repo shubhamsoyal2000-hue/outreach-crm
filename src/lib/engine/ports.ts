@@ -38,7 +38,7 @@ export interface VerifyResult {
 }
 
 export interface Verifier {
-  verify(email: string): Promise<VerifyResult>;
+  verify(email: string, opts?: { allowShared?: boolean }): Promise<VerifyResult>;
 }
 
 export interface EngineDeps {

@@ -148,7 +148,7 @@ async function tryItem(
     const fresh = contact.verified_at && now.getTime() - new Date(contact.verified_at).getTime() <= maxAgeMs;
     if (status === "unverified" || !fresh) {
       if (!deps.verifier) return null; // waits until a verification API key is configured
-      const result = await deps.verifier.verify(contact.email);
+      const result = await deps.verifier.verify(contact.email, { allowShared: settings.allow_shared_inboxes });
       status = result.status;
       await store.updateContactVerification(contact.id, result.status, result.detail, now);
     }
