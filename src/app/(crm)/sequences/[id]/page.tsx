@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 const SAMPLE_CONTACT: Contact = {
   id: "sample", company_id: null, email: "jane@example.com", first_name: "Jane", last_name: "Doe", title: "Logistics Manager",
-  timezone: null, fields: { commodity: "furniture", port: "Savannah" }, verification_status: "valid", verified_at: null,
+  timezone: null, fields: { top_us_port: "Savannah, Georgia", top_route_from: "Yantian China", top_route_to: "Savannah, Georgia", shipments_90d: "1,200" }, verification_status: "valid", verified_at: null,
 };
 const SAMPLE_COMPANY: Company = { id: "sample", name: "Acme Imports", domain: "example.com", state: "GA", status: "active", facts: {} };
 
