@@ -61,6 +61,8 @@ export async function saveSettings(fd: FormData) {
   const start = int(fd, "send_window_start_hour", 9);
   const end = int(fd, "send_window_end_hour", 16);
   if (end <= start) done("/settings", "The sending window must end after it starts.");
+  const postal = str(fd, "postal_address");
+  if (postal && !looksLikePostalAddress(postal)) done("/settings", "Enter the full postal address (street, city, state and ZIP). US law requires a real mailing address, not just a ZIP code.");
   await must(
     db().from("settings").update({
       company_name: str(fd, "company_name"),
@@ -76,11 +78,17 @@ export async function saveSettings(fd: FormData) {
   done("/settings", "Settings saved.");
 }
 
+/** A street number, some words and a ZIP-like number: enough to catch "92335" on its own. */
+function looksLikePostalAddress(s: string): boolean {
+  const t = s.trim();
+  return t.length >= 15 && /[a-z]{3,}/i.test(t) && (t.match(/\d+/g) ?? []).length >= 2;
+}
+
 export async function setSending(fd: FormData) {
   const on = str(fd, "on") === "1";
   if (on) {
     const s = await new SupabaseStore().getSettings();
-    if (!s.postal_address) done("/settings", "Add the postal address first. US law requires it in every email.");
+    if (!looksLikePostalAddress(s.postal_address)) done("/settings", "Add the full postal address first (street, city, state and ZIP). US law requires it in every email.");
   }
   await must(db().from("settings").update({ sending_enabled: on, updated_at: new Date().toISOString() }).eq("id", 1));
   done("/", on ? "Sending is on." : "Sending is off. Nothing will go out until you turn it back on.");
