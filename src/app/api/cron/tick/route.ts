@@ -3,7 +3,7 @@ import { safeEqual } from "@/lib/crypto";
 import { productionDeps } from "@/lib/engine";
 import { runSendPass } from "@/lib/engine/send";
 import { runSyncPass } from "@/lib/engine/sync";
-import { SupabaseStore } from "@/lib/store/supabase";
+import { SupabaseStore, db } from "@/lib/store/supabase";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -14,13 +14,24 @@ export const maxDuration = 60;
  * then sends at most one email per inbox.
  */
 async function tick(request: Request) {
-  const auth = request.headers.get("authorization") ?? "";
-  if (!safeEqual(auth, `Bearer ${env.cronSecret}`)) return Response.json({ error: "unauthorized" }, { status: 401 });
+  if (!(await authorized(request))) return Response.json({ error: "unauthorized" }, { status: 401 });
   const store = new SupabaseStore();
   const deps = productionDeps();
   const sync = await runSyncPass(store, deps);
   const send = await runSendPass(store, deps);
   return Response.json({ at: new Date().toISOString(), sync, send });
+}
+
+/** Accepts the secret in Supabase Vault (cron_secret), or CRON_SECRET if set in the environment. */
+async function authorized(request: Request): Promise<boolean> {
+  const auth = request.headers.get("authorization") ?? "";
+  if (!auth.startsWith("Bearer ")) return false;
+  const token = auth.slice("Bearer ".length);
+  if (token.length < 24) return false;
+  if (env.cronSecret && safeEqual(token, env.cronSecret)) return true;
+  const { data, error } = await db().rpc("cron_secret_matches", { token });
+  if (error) throw new Error(`check scheduler secret: ${error.message}`);
+  return data === true;
 }
 
 export const GET = tick;

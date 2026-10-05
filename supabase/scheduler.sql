@@ -2,13 +2,15 @@
 -- whose own cron only runs once a day). Run this once in the Supabase SQL editor
 -- after deploying, replacing the URL with your APP_URL.
 --
--- The secret is read from Supabase Vault, so it never sits in this job's text.
--- Add it once in the dashboard: Project Settings > Vault > Add new secret,
--- name "cron_secret", value = the CRON_SECRET you set in Vercel.
--- Until that secret exists the job runs but sends nothing.
+-- The secret is generated here and kept in Supabase Vault as "cron_secret".
+-- The app checks it through cron_secret_matches() (migration 0002), so it is
+-- never copied anywhere and nobody needs to see it.
 
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
+
+select vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'cron_secret')
+where not exists (select 1 from vault.secrets where name = 'cron_secret');
 
 select cron.schedule(
   'outreach-crm-tick',
