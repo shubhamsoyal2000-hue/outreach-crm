@@ -222,9 +222,9 @@ export const COLLECTOR_SOURCE = String.raw`(function () {
   if (!stored) lines.push("<span style='color:#b00'>This browser would not save the list. Download it now.</span>");
   box.innerHTML = lines.map(function (l) { return "<div style='margin-bottom:6px'>" + l + "</div>"; }).join("") +
     "<div style='display:flex;gap:8px;margin-top:10px'>" +
-    "<button data-a='dl' style='flex:1;padding:7px;border:0;border-radius:6px;background:#111;color:#fff;cursor:pointer'>Download CSV</button>" +
-    "<button data-a='clear' style='padding:7px 10px;border:1px solid #ccc;border-radius:6px;background:#fff;cursor:pointer'>Clear list</button>" +
-    "<button data-a='close' style='padding:7px 10px;border:1px solid #ccc;border-radius:6px;background:#fff;cursor:pointer'>Close</button></div>";
+    "<button data-a='dl' style='flex:1;padding:7px;border:0;border-radius:6px;background:#111;color:#fff;font:600 13px system-ui,sans-serif;cursor:pointer'>Download CSV</button>" +
+    "<button data-a='clear' style='padding:7px 10px;border:1px solid #ccc;border-radius:6px;background:#fff;color:#111;font:13px system-ui,sans-serif;cursor:pointer'>Clear list</button>" +
+    "<button data-a='close' style='padding:7px 10px;border:1px solid #ccc;border-radius:6px;background:#fff;color:#111;font:13px system-ui,sans-serif;cursor:pointer'>Close</button></div>";
   box.addEventListener("click", function (e) {
     var a = e.target && e.target.getAttribute && e.target.getAttribute("data-a");
     if (a === "dl") download(load().length ? load() : list);
