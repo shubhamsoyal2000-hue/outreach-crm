@@ -30,7 +30,7 @@ This is Phase 1 of the roadmap: the sending system.
 1. Create a Supabase project and run `supabase/migrations/0001_init.sql` in its SQL editor.
 2. Deploy to Vercel from this repository and set the variables in `.env.example`.
 3. In Google Cloud (see the Phase 0 checklist), add `https://YOUR-APP/api/oauth/google/callback` as an authorised redirect URL.
-4. Run `supabase/scheduler.sql` in Supabase with your URL and `CRON_SECRET`, so the app checks inboxes and sends every 5 minutes.
+4. Run `supabase/scheduler.sql` in Supabase with your URL, then add your `CRON_SECRET` in Supabase Vault as `cron_secret`, so the app checks inboxes and sends every 5 minutes.
 5. Sign in, fill in Settings (company name and postal address), connect each inbox, set its sender name, signature and cold start
    date, then resume it. Import leads, create a sequence, edit its copy, activate it, enroll leads, and turn sending on.
 
