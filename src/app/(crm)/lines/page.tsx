@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Badge, Flash } from "@/components/ui";
+import { Flash } from "@/components/ui";
 import { lineStatus, type LineStatus } from "@/lib/opening-lines";
 import { db } from "@/lib/store/supabase";
 import { approveAllLines, reviewLine } from "../../line-actions";
@@ -19,7 +19,7 @@ const CONF: Record<string, "good" | "warn" | "bad"> = { high: "good", medium: "w
 export default async function LinesPage({ searchParams }: { searchParams: Promise<{ msg?: string; tab?: string }> }) {
   const { msg, tab: rawTab } = await searchParams;
   const tab: LineStatus = rawTab && rawTab in TABS ? (rawTab as LineStatus) : "pending";
-  const res = await db().from("companies").select("id, name, domain, kind, facts").not("facts->>line_draft", "is", null).order("name");
+  const res = await db().from("companies").select("id, name, domain, kind, facts").not("facts->>line_draft", "is", null).or("kind.is.null,kind.eq.importer").order("name");
   const all = (res.data ?? []) as Row[];
   const counts = { pending: 0, approved: 0, skipped: 0 } as Record<LineStatus, number>;
   for (const r of all) counts[lineStatus(r.facts)]++;
@@ -38,7 +38,8 @@ export default async function LinesPage({ searchParams }: { searchParams: Promis
       <Flash msg={msg} />
       <p className="muted small">
         Researched from each company&apos;s public website. Each line opens their first email like this: &quot;Hi Jane, <em>[line]</em> We handle drayage and FTL
-        from the port to warehouses across the country...&quot; <Link href="/lookup">Back to the ImportInfo list</Link>
+        from the port to warehouses across the country...&quot; Only importers are listed here; companies that turned out to be forwarders or carriers moved to
+        the forwarder list. <Link href="/lookup">Back to the ImportInfo list</Link>
       </p>
       <div className="actions" style={{ marginBottom: 14 }}>
         {(Object.keys(TABS) as LineStatus[]).map((t) => (
@@ -70,7 +71,6 @@ export default async function LinesPage({ searchParams }: { searchParams: Promis
                       <strong>{r.name}</strong>
                       <div className="small">{r.domain && <a href={`https://${r.domain}`} target="_blank" rel="noreferrer">{r.domain}</a>}</div>
                       {f.line_what && <div className="small muted">{f.line_what}</div>}
-                      {r.kind && r.kind !== "importer" && <div className="small"><Badge value={r.kind} /></div>}
                     </td>
                     <td>
                       <form action={reviewLine}>
