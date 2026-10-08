@@ -65,6 +65,7 @@ export default async function SequencePage({ params, searchParams }: { params: P
           <div>
             <label>Who</label>
             <select name="who" defaultValue="importers_with_data">
+              <option value="importers_researched">Importers with an approved opening line</option>
               <option value="importers_with_data">Importers with ImportInfo data (ports, routes)</option>
               <option value="importers">All importers</option>
               <option value="forwarders">Freight forwarders</option>

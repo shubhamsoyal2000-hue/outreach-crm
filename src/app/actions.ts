@@ -272,7 +272,7 @@ export async function setSequenceStatus(fd: FormData) {
   done(`/sequences/${sequenceId}`, status === "active" ? "Sequence is active." : "Sequence paused. No emails from it will go out.");
 }
 
-const ENROLL_WHO = ["importers_with_data", "importers", "forwarders", "all"] as const;
+const ENROLL_WHO = ["importers_researched", "importers_with_data", "importers", "forwarders", "all"] as const;
 type EnrollWho = (typeof ENROLL_WHO)[number];
 
 function matchesWho(company: Company | null, who: EnrollWho): boolean {
@@ -280,6 +280,7 @@ function matchesWho(company: Company | null, who: EnrollWho): boolean {
   const kind = company?.kind ?? "importer";
   if (who === "forwarders") return kind === "forwarder";
   if (kind !== "importer") return false;
+  if (who === "importers_researched") return !!company?.facts?.custom_line;
   return who === "importers" || !!company?.facts?.top_us_port || !!company?.facts?.top_route_from;
 }
 
@@ -290,8 +291,16 @@ export async function enrollBatch(fd: FormData) {
   const who = (ENROLL_WHO as readonly string[]).includes(str(fd, "who")) ? (str(fd, "who") as EnrollWho) : "all";
   const store = new SupabaseStore();
 
-  const enrolled = await must(db().from("enrollments").select("contact_id").eq("sequence_id", sequenceId));
-  const already = new Set((enrolled.data ?? []).map((r) => r.contact_id));
+  // Anyone already in any sequence (this one or another) is left alone, so nobody gets two cold threads.
+  const already = new Set<string>();
+  const elsewhere = new Set<string>();
+  for (let from = 0; ; from += 1000) {
+    const page = await must(db().from("enrollments").select("contact_id, sequence_id").order("id").range(from, from + 999));
+    const rows = (page.data ?? []) as { contact_id: string; sequence_id: string }[];
+    for (const r of rows) (r.sequence_id === sequenceId ? already : elsewhere).add(r.contact_id);
+    if (rows.length < 1000) break;
+  }
+  let inOther = 0;
   const candidates: { contact: Contact; company: Company | null; alreadyEnrolled: boolean }[] = [];
   for (let from = 0; candidates.length < count; from += 1000) {
     const page = await must(
@@ -306,13 +315,14 @@ export async function enrollBatch(fd: FormData) {
     for (const { company, ...contact } of rows) {
       if (candidates.length >= count) break;
       if (already.has(contact.id) || !matchesWho(company, who)) continue;
+      if (elsewhere.has(contact.id)) { inOther++; continue; }
       candidates.push({ contact: contact as Contact, company, alreadyEnrolled: false });
     }
     if (rows.length < 1000) break;
   }
 
   const summary = await enrollContacts(store, sequenceId, candidates, new Date());
-  const skipped = Object.entries(summary.skipped).map(([k, n]) => `${n} ${k}`);
+  const skipped = Object.entries({ ...summary.skipped, ...(inOther ? { "already in another sequence": inOther } : {}) }).map(([k, n]) => `${n} ${k}`);
   done(
     `/sequences/${sequenceId}`,
     `Enrolled ${summary.enrolled} contacts.${skipped.length ? ` Skipped: ${skipped.join(", ")}.` : ""}` +
