@@ -257,6 +257,33 @@ describe("sync pass", () => {
     expect(new Date(eJane.next_send_at) > new Date(before)).toBe(true);
   });
 
+  it("a 'no longer monitored' auto-reply blocks that address and adds the colleagues it names", async () => {
+    const { store, deps, mailer, jane, eJane, eBob, seqId } = await sentOnce();
+    mailer.getText = async () =>
+      "Good Morning/Afternoon:\nThis email address is no longer monitored.\nPurchasing Department: Purchasing@acme.com\nQuality Control: qualitycontrol@acme.com\nOur forwarder: ops@otherco.com\nnoreply@acme.com";
+    mailer.inbound["sender0@getabccargo.com"] = [
+      inbound({ subject: "Automatic reply: drayage and FTL for Acme", snippet: "Good Morning/Afternoon: This email address is no longer monitored. If your matter requires immediate assistance", headers: { "auto-submitted": "auto-replied" } }),
+    ];
+    const [out] = await runSyncPass(store, deps);
+    expect(out).toMatchObject({ autoReplies: 1, notMonitored: 1, referred: 2, replies: 0 });
+    expect(eJane).toMatchObject({ status: "stopped", stop_reason: "not_monitored" });
+    expect(await store.isSuppressed(jane.email)).toBe(true);
+    expect(eBob.status).toBe("active"); // the company is not stopped
+    const added = store.contacts.filter((c) => c.fields.referred_by === jane.email).map((c) => c.email).sort();
+    expect(added).toEqual(["purchasing@acme.com", "qualitycontrol@acme.com"]);
+    const newEnrollments = store.enrollments.filter((e) => e.sequence_id === seqId && store.contacts.find((c) => c.id === e.contact_id)?.fields.referred_by);
+    expect(newEnrollments).toHaveLength(2);
+    expect(store.quotes).toHaveLength(0);
+  });
+
+  it("a 'no longer monitored' note without auto-reply headers is still not treated as a reply", async () => {
+    const { store, deps, mailer, eBob } = await sentOnce();
+    mailer.inbound["sender0@getabccargo.com"] = [inbound({ subject: "Undeliverable mailbox", snippet: "Jane Doe is no longer with the company. Please contact sales@acme.com." })];
+    const [out] = await runSyncPass(store, deps);
+    expect(out).toMatchObject({ replies: 0, notMonitored: 1, referred: 1 });
+    expect(eBob.status).toBe("active");
+  });
+
   it("an opt-out reply suppresses the address", async () => {
     const { store, deps, mailer, jane, eBob } = await sentOnce();
     mailer.inbound["sender0@getabccargo.com"] = [inbound({ snippet: "Please remove me from your list." })];

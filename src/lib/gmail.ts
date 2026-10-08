@@ -3,6 +3,7 @@ import { env } from "./config";
 import { decrypt } from "./crypto";
 import { MailerError, type FetchedMessage, type Mailer, type SentMessage } from "./engine/ports";
 import { toBase64Url } from "./mime";
+import { htmlToText } from "./referrals";
 import type { HistoryMessage, HistoryReader } from "./history/scan";
 import type { Inbox } from "./types";
 
@@ -102,12 +103,24 @@ export async function profileEmail(token: string): Promise<string> {
   return p.emailAddress.toLowerCase();
 }
 
+interface GmailPart {
+  mimeType?: string;
+  body?: { data?: string };
+  parts?: GmailPart[];
+}
+
 interface GmailMessage {
   id: string;
   threadId: string;
   snippet?: string;
   internalDate?: string;
-  payload?: { headers?: { name: string; value: string }[] };
+  payload?: GmailPart & { headers?: { name: string; value: string }[] };
+}
+
+function partText(part: GmailPart | undefined, mime: string): string {
+  if (!part) return "";
+  if (part.mimeType === mime && part.body?.data) return Buffer.from(part.body.data, "base64url").toString("utf8");
+  return (part.parts ?? []).map((p) => partText(p, mime)).join("\n");
 }
 
 const METADATA_HEADERS = ["From", "Subject", "Message-ID", "Auto-Submitted", "Precedence", "X-Autoreply", "X-Autorespond", "X-Failed-Recipients", "Content-Type"];
@@ -168,6 +181,16 @@ export const gmailMailer: Mailer = {
         });
       }
       return out;
+    });
+  },
+
+  async getText(inbox, messageId): Promise<string> {
+    return withToken(inbox, async (token) => {
+      const m = await gmail<GmailMessage>(token, `/messages/${messageId}?format=full`);
+      const plain = partText(m.payload, "text/plain");
+      const html = partText(m.payload, "text/html");
+      // Links like <a href="mailto:x@y.com"> only show up in the HTML part, so read both.
+      return `${plain}\n${html ? htmlToText(html) : ""}`.slice(0, 20_000);
     });
   },
 };

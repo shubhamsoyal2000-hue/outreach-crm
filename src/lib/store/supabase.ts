@@ -149,6 +149,30 @@ export class SupabaseStore implements Store {
     return check(await db().from("companies").select("*").eq("domain", domain).maybeSingle(), "company by domain");
   }
 
+  async getCompany(id: string) {
+    return check(await db().from("companies").select("*").eq("id", id).maybeSingle(), "company");
+  }
+
+  async addReferredContacts(from: Contact, emails: string[], note: string, at: Date) {
+    if (!emails.length) return [];
+    const existing = check(await db().from("contacts").select("email").in("email", emails), "existing contacts") as { email: string }[];
+    const known = new Set(existing.map((c) => c.email));
+    const fresh: string[] = [];
+    for (const email of emails) if (!known.has(email) && !(await this.isSuppressed(email))) fresh.push(email);
+    if (!fresh.length) return [];
+    const rows = fresh.map((email) => ({
+      company_id: from.company_id,
+      email,
+      timezone: from.timezone,
+      fields: { referred_by: from.email },
+      verification_status: "valid",
+      verified_at: at.toISOString(),
+      verification_detail: note,
+      source: "auto_reply",
+    }));
+    return check(await db().from("contacts").upsert(rows, { onConflict: "email", ignoreDuplicates: true }).select("*"), "add referred contacts") as Contact[];
+  }
+
   async stopCompany(companyId: string, status: Company["status"], reason: string, stopReason: string) {
     check(
       await db().from("companies").update({ status, status_reason: reason, status_changed_at: new Date().toISOString() }).eq("id", companyId),

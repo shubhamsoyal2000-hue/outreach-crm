@@ -3,7 +3,9 @@ import { emailDomain, isFreemailDomain } from "../email-rules";
 import type { Store } from "../store/types";
 import { addBusinessDays, localDay, randomTimeInWindow } from "../time";
 import type { Contact, Enrollment, Inbox, Settings } from "../types";
-import { MailerError, type EngineDeps } from "./ports";
+import { referredAddresses } from "../referrals";
+import { enrollContacts } from "./enroll";
+import { MailerError, type EngineDeps, type FetchedMessage } from "./ports";
 import { recipientTimezone } from "./send";
 
 export interface ReplyEvent {
@@ -16,6 +18,10 @@ export interface ReplyEvent {
 export interface SyncOutcome {
   inbox: string;
   replies: number;
+  /** Auto-replies saying the address is no longer read; those addresses are now on Do not email. */
+  notMonitored: number;
+  /** New contacts added from addresses those auto-replies pointed to. */
+  referred: number;
   /** Replies seen for the first time in this pass, for the alert email. */
   newReplies: ReplyEvent[];
   bounces: number;
@@ -34,7 +40,7 @@ const OVERLAP_MS = 10 * 60_000;
  * Mail that matches none of our contacts (including warm-up traffic) is ignored.
  */
 export async function syncInbox(store: Store, deps: EngineDeps, settings: Settings, inbox: Inbox): Promise<SyncOutcome> {
-  const out: SyncOutcome = { inbox: inbox.email, replies: 0, newReplies: [], bounces: 0, autoReplies: 0, optOuts: 0 };
+  const out: SyncOutcome = { inbox: inbox.email, replies: 0, notMonitored: 0, referred: 0, newReplies: [], bounces: 0, autoReplies: 0, optOuts: 0 };
   if (inbox.status === "disconnected" || !inbox.refresh_token_enc) return out;
   const now = deps.now();
   const since = inbox.last_synced_at
@@ -96,6 +102,11 @@ export async function syncInbox(store: Store, deps: EngineDeps, settings: Settin
         break;
       case "auto_reply":
         out.autoReplies++;
+        if (cls.notMonitored && contact) {
+          out.notMonitored++;
+          out.referred += await handleNotMonitored(store, deps, inbox, msg, from, contact, enrollment, now);
+          break;
+        }
         if (enrollment?.status === "active") await holdEnrollment(store, deps, settings, enrollment, contact, now);
         break;
       case "unsubscribe_reply":
@@ -128,6 +139,42 @@ export async function syncInbox(store: Store, deps: EngineDeps, settings: Settin
 
   await store.updateInbox(inbox.id, { last_synced_at: now.toISOString() });
   return out;
+}
+
+/**
+ * The address is dead: put it on Do not email, stop its sequence, and add any
+ * colleagues the auto-reply names (same company domain only) to the same
+ * sequence, so the company still hears from us once, at a live address.
+ */
+async function handleNotMonitored(
+  store: Store,
+  deps: EngineDeps,
+  inbox: Inbox,
+  msg: FetchedMessage,
+  from: string,
+  contact: Contact,
+  enrollment: Enrollment | null,
+  now: Date,
+): Promise<number> {
+  await store.addSuppression({ email: contact.email, reason: "manual", note: `mailbox not monitored (auto-reply): ${msg.snippet.slice(0, 150)}` });
+  await store.stopContactEnrollments(contact.id, "not_monitored");
+
+  let text = `${msg.subject}\n${msg.snippet}`;
+  if (deps.mailer.getText) {
+    try {
+      text += `\n${await deps.mailer.getText(inbox, msg.id)}`;
+    } catch {
+      // The snippet alone still gives us whatever addresses fit in it.
+    }
+  }
+  const company = contact.company_id ? await store.getCompany(contact.company_id) : null;
+  const inboxes = await store.listInboxes();
+  const emails = referredAddresses(text, { sender: from, companyDomain: company?.domain, ownEmails: inboxes.map((i) => i.email) });
+  const added = await store.addReferredContacts(contact, emails, `named in an auto-reply from ${contact.email}`, now);
+  if (added.length && enrollment && company?.status !== "replied" && company?.status !== "do_not_contact") {
+    await enrollContacts(store, enrollment.sequence_id, added.map((c) => ({ contact: c, company, alreadyEnrolled: false })), now);
+  }
+  return added.length;
 }
 
 async function holdEnrollment(

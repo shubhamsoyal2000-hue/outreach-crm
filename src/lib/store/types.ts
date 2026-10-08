@@ -69,6 +69,13 @@ export interface Store {
   getContact(id: string): Promise<Contact | null>;
   findContactByEmail(email: string): Promise<Contact | null>;
   findCompanyByDomain(domain: string): Promise<Company | null>;
+  getCompany(id: string): Promise<Company | null>;
+  /**
+   * Adds addresses an auto-reply pointed to ("contact purchasing@...") as contacts
+   * at the same company. Skips addresses already in Leads or on Do not email.
+   * Returns the new contacts.
+   */
+  addReferredContacts(from: Contact, emails: string[], note: string, at: Date): Promise<Contact[]>;
   /** Marks the company and stops every active enrollment of its contacts. */
   stopCompany(companyId: string, status: Company["status"], reason: string, stopReason: string): Promise<void>;
   stopContactEnrollments(contactId: string, stopReason: string): Promise<void>;

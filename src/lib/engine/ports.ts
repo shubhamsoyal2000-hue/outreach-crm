@@ -32,6 +32,8 @@ export class MailerError extends Error {
 export interface Mailer {
   send(inbox: Inbox, rawMessage: string, threadId: string | null): Promise<SentMessage>;
   listInbound(inbox: Inbox, since: Date): Promise<FetchedMessage[]>;
+  /** The message body as plain text, for auto-replies that name other addresses. */
+  getText?(inbox: Inbox, messageId: string): Promise<string>;
 }
 
 export interface VerifyResult {

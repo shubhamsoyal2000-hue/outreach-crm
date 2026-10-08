@@ -114,6 +114,21 @@ export class MemoryStore implements Store {
   async getContact(id: string) { return this.contacts.find((c) => c.id === id) ?? null; }
   async findContactByEmail(email: string) { return this.contacts.find((c) => c.email === email) ?? null; }
   async findCompanyByDomain(domain: string) { return this.companies.find((c) => c.domain === domain) ?? null; }
+  async getCompany(id: string) { return this.companies.find((c) => c.id === id) ?? null; }
+
+  async addReferredContacts(from: Contact, emails: string[], _note: string, at: Date) {
+    const added: Contact[] = [];
+    for (const email of emails) {
+      if (this.contacts.some((c) => c.email === email) || (await this.isSuppressed(email))) continue;
+      const c: Contact = {
+        id: randomUUID(), company_id: from.company_id, email, first_name: "", last_name: "", title: "", timezone: from.timezone,
+        fields: { referred_by: from.email }, verification_status: "valid", verified_at: at.toISOString(),
+      };
+      this.contacts.push(c);
+      added.push(c);
+    }
+    return added;
+  }
 
   async recordQuoteReply(r: ReplyForQuote) {
     const open = this.quotes.find(

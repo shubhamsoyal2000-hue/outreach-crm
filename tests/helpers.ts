@@ -7,6 +7,7 @@ export class FakeMailer implements Mailer {
   sent: { inbox: string; raw: string; threadId: string | null }[] = [];
   inbound: Record<string, FetchedMessage[]> = {};
   failWith: MailerError | null = null;
+  getText?: (inbox: Inbox, messageId: string) => Promise<string>;
 
   async send(inbox: Inbox, raw: string, threadId: string | null): Promise<SentMessage> {
     if (this.failWith) throw this.failWith;
