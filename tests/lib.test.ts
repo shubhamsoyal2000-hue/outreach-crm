@@ -160,3 +160,13 @@ describe("domain blocking", () => {
     expect(await store.isSuppressed("ann@notdsv.com")).toBe(false);
   });
 });
+
+describe("company name in emails", () => {
+  it("uses the fallback when the company name is only a web address", async () => {
+    const { templateVars } = await import("@/lib/compose");
+    const contact = { id: "c", company_id: "co", email: "a@valmet.com", first_name: "", last_name: "", title: "", timezone: null, fields: {}, verification_status: "valid", verified_at: null } as never;
+    const co = (name: string) => ({ id: "co", name, domain: "valmet.com", state: null, status: "active", facts: {} }) as never;
+    expect(templateVars(contact, co("valmet.com"), { sender_name: "Marcus Jones" }).company).toBe("");
+    expect(templateVars(contact, co("Valmet Inc"), { sender_name: "Marcus Jones" }).company).toBe("Valmet Inc");
+  });
+});

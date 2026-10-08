@@ -62,7 +62,16 @@ export default async function SequencePage({ params, searchParams }: { params: P
         </div>
         <form action={enrollBatch} className="row" style={{ marginTop: 14 }}>
           <input type="hidden" name="sequence_id" value={id} />
-          <div><label>Add the oldest leads not yet in this sequence</label><input type="number" name="count" min={1} max={1000} defaultValue={50} /></div>
+          <div>
+            <label>Who</label>
+            <select name="who" defaultValue="importers_with_data">
+              <option value="importers_with_data">Importers with ImportInfo data (ports, routes)</option>
+              <option value="importers">All importers</option>
+              <option value="forwarders">Freight forwarders</option>
+              <option value="all">Everyone</option>
+            </select>
+          </div>
+          <div><label>How many (oldest leads not yet in this sequence)</label><input type="number" name="count" min={1} max={1000} defaultValue={50} /></div>
           <div style={{ flex: "0 0 auto" }}><button type="submit" className="secondary">Enroll</button></div>
         </form>
         <p className="small muted" style={{ marginTop: 8 }}>

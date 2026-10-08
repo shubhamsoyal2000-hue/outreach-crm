@@ -1,5 +1,6 @@
 import "server-only";
 import type { LeadRow, Rejected } from "./csv-import";
+import { guessCompanyKind } from "./company-kind";
 import { domainAndParents } from "./email-rules";
 import { db } from "./store/supabase";
 
@@ -34,6 +35,7 @@ export async function saveLeads(rows: LeadRow[], rejected: Rejected[], source: s
     const blockedDomains = new Set((supDomains.data ?? []).map((s) => s.domain));
     const known = new Set((existing.data ?? []).map((c) => c.email));
 
+    const allowed = chunk.filter((r) => !blocked.has(r.email) && !domainAndParents(r.email.split("@")[1]).some((d) => blockedDomains.has(d)));
     chunk = chunk.filter((r) => {
       if (blocked.has(r.email) || domainAndParents(r.email.split("@")[1]).some((d) => blockedDomains.has(d))) {
         summary.rejected.push({ line: r.line, email: r.email, reason: "opted out or bounced before" });
@@ -45,9 +47,13 @@ export async function saveLeads(rows: LeadRow[], rejected: Rejected[], source: s
       }
       return true;
     });
-    if (!chunk.length) continue;
+    if (!chunk.length) {
+      await mergeCompanyFacts(allowed);
+      continue;
+    }
 
     const companyIds = await upsertCompanies(chunk);
+    await mergeCompanyFacts(allowed);
     const contacts = chunk.map((r) => ({
       email: r.email,
       first_name: r.first_name,
@@ -80,7 +86,10 @@ async function upsertCompanies(rows: LeadRow[]): Promise<Map<string, string>> {
     const res = await db()
       .from("companies")
       .upsert(
-        withDomain.map((r) => ({ name: r.company, name_key: r.company_key, domain: r.company_domain, city: r.city || null, state: r.state || null, country: r.country || null })),
+        withDomain.map((r) => ({
+          name: r.company, name_key: r.company_key, domain: r.company_domain, city: r.city || null, state: r.state || null, country: r.country || null,
+          kind: guessCompanyKind(r.company_domain),
+        })),
         { onConflict: "domain", ignoreDuplicates: true },
       );
     if (res.error) throw new Error(`save companies: ${res.error.message}`);
@@ -105,4 +114,36 @@ async function upsertCompanies(rows: LeadRow[]): Promise<Map<string, string>> {
     }
   }
   return ids;
+}
+
+/** Company-level facts from the ImportInfo button (ports, routes, shipment counts). */
+export const COMPANY_FACT_KEYS = [
+  "shipments_30d", "shipments_90d", "shipments_year", "last_shipment", "top_us_port", "top_route_from", "top_route_to", "company_phone", "importinfo_page",
+];
+
+/**
+ * Copies company facts from imported rows onto the company, including companies
+ * already in the CRM, so every contact there can use them in emails. Newer
+ * non-empty values replace older ones.
+ */
+async function mergeCompanyFacts(rows: LeadRow[]) {
+  const byDomain = new Map<string, Record<string, string>>();
+  for (const r of rows) {
+    if (!r.company_domain) continue;
+    const facts: Record<string, string> = {};
+    for (const k of COMPANY_FACT_KEYS) if (r.fields[k]?.trim()) facts[k] = r.fields[k].trim();
+    if (Object.keys(facts).length) byDomain.set(r.company_domain, { ...(byDomain.get(r.company_domain) ?? {}), ...facts });
+  }
+  if (!byDomain.size) return;
+  const found = await db().from("companies").select("id, name, domain, facts, state").in("domain", [...byDomain.keys()]);
+  if (found.error) throw new Error(found.error.message);
+  for (const c of (found.data ?? []) as { id: string; name: string; domain: string; facts: Record<string, string> | null; state: string | null }[]) {
+    const facts = { ...(c.facts ?? {}), ...byDomain.get(c.domain)! };
+    const row = rows.find((r) => r.company_domain === c.domain && r.company && r.company !== c.domain);
+    const state = c.state || rows.find((r) => r.company_domain === c.domain && r.state)?.state || null;
+    // A company first saved from an email address is named after its domain; ImportInfo has the real name.
+    const name = c.name === c.domain && row ? row.company : c.name;
+    const res = await db().from("companies").update({ facts, state, name }).eq("id", c.id);
+    if (res.error) throw new Error(`save company facts: ${res.error.message}`);
+  }
 }

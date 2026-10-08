@@ -15,6 +15,12 @@ export type Composed =
   | { ok: true; subject: string; body: string; newThread: boolean }
   | { ok: false; missing: string[] };
 
+/** A company "name" that is only its web address (e.g. "acme.com") reads badly in an email, so the fallback is used instead. */
+function displayCompanyName(name: string | null | undefined): string {
+  const n = (name ?? "").trim();
+  return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(n) ? "" : n;
+}
+
 export function templateVars(contact: Contact, company: Company | null, inbox: Pick<Inbox, "sender_name">) {
   const first = tidyName(contact.first_name);
   const last = tidyName(contact.last_name);
@@ -26,7 +32,7 @@ export function templateVars(contact: Contact, company: Company | null, inbox: P
     full_name: [first, last].filter(Boolean).join(" "),
     title: contact.title,
     email: contact.email,
-    company: company?.name ?? contact.fields.company ?? "",
+    company: displayCompanyName(company?.name ?? contact.fields.company),
     sender_name: inbox.sender_name,
     sender_first_name: inbox.sender_name.split(" ")[0],
   } as Record<string, string>;

@@ -51,6 +51,8 @@ export interface Company {
   state: string | null;
   status: "active" | "replied" | "do_not_contact";
   facts: Record<string, string>;
+  /** importer, forwarder, carrier or other: guessed from the domain, editable. */
+  kind?: "importer" | "forwarder" | "carrier" | "other" | null;
 }
 
 export type QuoteStatus = "new" | "quoting" | "quoted" | "won" | "lost";

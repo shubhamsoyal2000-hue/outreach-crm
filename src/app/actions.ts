@@ -149,6 +149,13 @@ export async function setCompanyDoNotContact(fd: FormData) {
   done("/contacts", "Company marked do-not-contact. Its sequences are stopped.");
 }
 
+export async function setCompanyKind(fd: FormData) {
+  const kind = str(fd, "kind");
+  if (!["importer", "forwarder", "carrier", "other"].includes(kind)) done("/lookup", "Pick a type.");
+  await must(db().from("companies").update({ kind }).eq("id", str(fd, "company_id")));
+  done(`/lookup?tab=${encodeURIComponent(str(fd, "tab") || "todo")}`, "Saved.");
+}
+
 // ---- Suppression ----
 
 /** One entry per line (or comma separated): emails, domains or website addresses. */
@@ -265,30 +272,52 @@ export async function setSequenceStatus(fd: FormData) {
   done(`/sequences/${sequenceId}`, status === "active" ? "Sequence is active." : "Sequence paused. No emails from it will go out.");
 }
 
-/** Enrolls up to `count` contacts that are not yet in this sequence and are not blocked. */
+const ENROLL_WHO = ["importers_with_data", "importers", "forwarders", "all"] as const;
+type EnrollWho = (typeof ENROLL_WHO)[number];
+
+function matchesWho(company: Company | null, who: EnrollWho): boolean {
+  if (who === "all") return true;
+  const kind = company?.kind ?? "importer";
+  if (who === "forwarders") return kind === "forwarder";
+  if (kind !== "importer") return false;
+  return who === "importers" || !!company?.facts?.top_us_port || !!company?.facts?.top_route_from;
+}
+
+/** Enrolls up to `count` contacts of the chosen kind that are not yet in this sequence and are not blocked. */
 export async function enrollBatch(fd: FormData) {
   const sequenceId = str(fd, "sequence_id");
   const count = Math.min(1000, Math.max(1, int(fd, "count", 50)));
+  const who = (ENROLL_WHO as readonly string[]).includes(str(fd, "who")) ? (str(fd, "who") as EnrollWho) : "all";
   const store = new SupabaseStore();
 
   const enrolled = await must(db().from("enrollments").select("contact_id").eq("sequence_id", sequenceId));
   const already = new Set((enrolled.data ?? []).map((r) => r.contact_id));
-  const pool = await must(
-    db()
-      .from("contacts")
-      .select("*, company:companies(*)")
-      .in("verification_status", ["valid", "catch_all", "unverified"])
-      .order("created_at")
-      .limit(count + already.size),
-  );
-  const candidates = (pool.data ?? [])
-    .filter((c: { id: string }) => !already.has(c.id))
-    .slice(0, count)
-    .map(({ company, ...contact }: Contact & { company: Company | null }) => ({ contact: contact as Contact, company, alreadyEnrolled: false }));
+  const candidates: { contact: Contact; company: Company | null; alreadyEnrolled: boolean }[] = [];
+  for (let from = 0; candidates.length < count; from += 1000) {
+    const page = await must(
+      db()
+        .from("contacts")
+        .select("*, company:companies(*)")
+        .in("verification_status", ["valid", "catch_all", "unverified"])
+        .order("created_at")
+        .range(from, from + 999),
+    );
+    const rows = (page.data ?? []) as (Contact & { company: Company | null })[];
+    for (const { company, ...contact } of rows) {
+      if (candidates.length >= count) break;
+      if (already.has(contact.id) || !matchesWho(company, who)) continue;
+      candidates.push({ contact: contact as Contact, company, alreadyEnrolled: false });
+    }
+    if (rows.length < 1000) break;
+  }
 
   const summary = await enrollContacts(store, sequenceId, candidates, new Date());
   const skipped = Object.entries(summary.skipped).map(([k, n]) => `${n} ${k}`);
-  done(`/sequences/${sequenceId}`, `Enrolled ${summary.enrolled} contacts.${skipped.length ? ` Skipped: ${skipped.join(", ")}.` : ""}`);
+  done(
+    `/sequences/${sequenceId}`,
+    `Enrolled ${summary.enrolled} contacts.${skipped.length ? ` Skipped: ${skipped.join(", ")}.` : ""}` +
+      " Anyone you emailed by hand in the last 3 weeks waits until 3 weeks have passed.",
+  );
 }
 
 // ---- Quotes ----
