@@ -3,6 +3,7 @@ import { env } from "./config";
 import { decrypt } from "./crypto";
 import { MailerError, type FetchedMessage, type Mailer, type SentMessage } from "./engine/ports";
 import { toBase64Url } from "./mime";
+import type { HistoryMessage, HistoryReader } from "./history/scan";
 import type { Inbox } from "./types";
 
 // Gmail over plain REST calls with OAuth, no stored passwords. gmail.modify
@@ -175,3 +176,34 @@ export async function accessTokenFromCode(code: string) {
   const t = await exchangeCode(code);
   return { accessToken: t.access_token, refreshToken: t.refresh_token ?? null, email: await profileEmail(t.access_token) };
 }
+
+const HISTORY_HEADERS = ["From", "To", "Cc", "Bcc", "Subject", ...METADATA_HEADERS.filter((h) => !["From", "Subject", "Message-ID"].includes(h))];
+
+/** Read-only access for the Gmail history scan: search, then headers only (never bodies). */
+export const gmailHistoryReader: HistoryReader = {
+  async list(inbox, q, pageToken, max) {
+    return withToken(inbox, async (token) => {
+      const page = await gmail<{ messages?: { id: string; threadId: string }[]; nextPageToken?: string; resultSizeEstimate?: number }>(
+        token,
+        `/messages?maxResults=${max}&q=${encodeURIComponent(q)}${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`,
+      );
+      return { messages: page.messages ?? [], next: page.nextPageToken ?? null, estimate: page.resultSizeEstimate ?? 0 };
+    });
+  },
+
+  async get(inbox, ids) {
+    if (!ids.length) return [];
+    return withToken(inbox, async (token) => {
+      const qs = HISTORY_HEADERS.map((h) => `metadataHeaders=${encodeURIComponent(h)}`).join("&");
+      const out: HistoryMessage[] = [];
+      // A few at a time stays well under Gmail's per-user rate limit.
+      for (let i = 0; i < ids.length; i += 5) {
+        const batch = await Promise.all(ids.slice(i, i + 5).map((id) => gmail<GmailMessage>(token, `/messages/${id}?format=metadata&${qs}`)));
+        for (const m of batch) {
+          out.push({ id: m.id, threadId: m.threadId, headers: headerMap(m), snippet: m.snippet ?? "", internalDate: new Date(Number(m.internalDate ?? Date.now())) });
+        }
+      }
+      return out;
+    });
+  },
+};

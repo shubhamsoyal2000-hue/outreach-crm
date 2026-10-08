@@ -28,3 +28,19 @@ select cron.schedule(
 );
 
 -- To stop it: select cron.unschedule('outreach-crm-tick');
+
+-- Gmail history scan (Gmail history page): every minute, returns at once when no scan is running.
+select cron.schedule(
+  'outreach-crm-history',
+  '* * * * *',
+  $job$
+  select net.http_post(
+    url := 'https://YOUR-APP.vercel.app/api/cron/history',
+    headers := jsonb_build_object('Authorization', 'Bearer ' || s.decrypted_secret, 'Content-Type', 'application/json'),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 55000
+  )
+  from vault.decrypted_secrets s
+  where s.name = 'cron_secret';
+  $job$
+);
