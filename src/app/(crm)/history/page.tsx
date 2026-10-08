@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SubmitButton } from "@/components/submit-button";
 import { Flash, Stat } from "@/components/ui";
 import { classifiedHistory } from "@/lib/history/classified";
 import type { ClassifiedAddress, HistoryGroup } from "@/lib/history/parse";
@@ -139,6 +140,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
           {GROUPS.map((g) => {
             const list = byGroup.get(g.key) ?? [];
             if (!list.length) return null;
+            const done = list.filter((r) => (g.key === "bounced" || g.key === "opted_out" ? r.suppressed : r.in_crm)).length;
             return (
               <div className="panel" key={g.key}>
                 <h2>{g.title} ({list.length})</h2>
@@ -152,7 +154,16 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                       </summary>
                       <GroupTable rows={list} pickMode={g.pickMode} actionable />
                     </details>
-                    <div className="actions"><button type="submit" disabled={running}>{g.button}</button></div>
+                    <div className="actions" style={{ alignItems: "center" }}>
+                      {done === list.length ? (
+                        <span className="badge good">Done: all {list.length} are in {g.key === "bounced" || g.key === "opted_out" ? "Do not email" : "Leads"}</span>
+                      ) : (
+                        <>
+                          <SubmitButton disabled={running}>{g.button}</SubmitButton>
+                          {done > 0 && <span className="muted small">{done} of {list.length} already done</span>}
+                        </>
+                      )}
+                    </div>
                   </form>
                 ) : (
                   <details>
