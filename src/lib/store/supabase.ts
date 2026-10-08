@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env } from "../config";
 import { domainAndParents, emailDomain } from "../email-rules";
 import type { Company, Contact, DueItem, Enrollment, Inbox, SequenceStep, Settings, VerificationStatus } from "../types";
-import type { NewEnrollment, NewMessage, Store } from "./types";
+import type { NewEnrollment, NewMessage, ReplyForQuote, Store } from "./types";
 
 let client: SupabaseClient | null = null;
 
@@ -173,6 +173,41 @@ export class SupabaseStore implements Store {
   async addSuppression(s: { email?: string; domain?: string; reason: string; note?: string }) {
     const onConflict = s.email ? "email" : "domain";
     check(await db().from("suppressions").upsert(s, { onConflict, ignoreDuplicates: true }), "add suppression");
+  }
+
+  async recordQuoteReply(r: ReplyForQuote) {
+    const findOpen = async () => {
+      const base = db().from("quotes").select("id, reply_count, last_reply_at").not("status", "in", "(won,lost)");
+      const q = r.company_id ? base.eq("company_id", r.company_id) : base.is("company_id", null).eq("from_email", r.from_email);
+      return check(await q.maybeSingle(), "open quote") as { id: string; reply_count: number; last_reply_at: string } | null;
+    };
+    let open = await findOpen();
+    if (!open) {
+      const inserted = await db().from("quotes").insert({
+        company_id: r.company_id,
+        contact_id: r.contact_id,
+        inbox_id: r.inbox_id,
+        from_email: r.from_email,
+        gmail_thread_id: r.gmail_thread_id,
+        last_reply_snippet: r.snippet,
+        first_reply_at: r.at,
+        last_reply_at: r.at,
+      });
+      if (!inserted.error) return;
+      // Another pass opened it first (unique open quote per company): add to that one.
+      if (inserted.error.code !== "23505") throw new Error(`open quote: ${inserted.error.message}`);
+      open = await findOpen();
+      if (!open) throw new Error("open quote: lost a race and found none");
+    }
+    const newer = new Date(r.at) >= new Date(open.last_reply_at);
+    check(
+      await db().from("quotes").update({
+        reply_count: open.reply_count + 1,
+        ...(newer ? { last_reply_at: r.at, last_reply_snippet: r.snippet, gmail_thread_id: r.gmail_thread_id, inbox_id: r.inbox_id } : {}),
+        updated_at: new Date().toISOString(),
+      }).eq("id", open.id),
+      "update quote",
+    );
   }
 
   async activeEnrollmentCounts() {

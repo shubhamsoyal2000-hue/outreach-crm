@@ -12,7 +12,7 @@ import { runTick } from "@/lib/engine/tick";
 import { saveLeads } from "@/lib/import-leads";
 import { newSessionToken, SESSION_COOKIE, sessionMaxAge } from "@/lib/session";
 import { db, SupabaseStore } from "@/lib/store/supabase";
-import type { Company, Contact } from "@/lib/types";
+import { QUOTE_STATUSES, type Company, type Contact, type QuoteStatus } from "@/lib/types";
 
 function str(fd: FormData, key: string): string {
   return String(fd.get(key) ?? "").trim();
@@ -289,6 +289,45 @@ export async function enrollBatch(fd: FormData) {
   const summary = await enrollContacts(store, sequenceId, candidates, new Date());
   const skipped = Object.entries(summary.skipped).map(([k, n]) => `${n} ${k}`);
   done(`/sequences/${sequenceId}`, `Enrolled ${summary.enrolled} contacts.${skipped.length ? ` Skipped: ${skipped.join(", ")}.` : ""}`);
+}
+
+// ---- Quotes ----
+
+function quoteFields(fd: FormData) {
+  const rate = str(fd, "rate_quoted").replace(/[$,\s]/g, "");
+  const n = Number(rate);
+  return {
+    lane_from: str(fd, "lane_from"),
+    lane_to: str(fd, "lane_to"),
+    equipment: str(fd, "equipment"),
+    notes: str(fd, "notes"),
+    ...(fd.has("rate_quoted") ? { rate_quoted: rate && Number.isFinite(n) && n >= 0 ? n : null } : {}),
+  };
+}
+
+export async function saveQuote(fd: FormData) {
+  const id = str(fd, "id");
+  const status = str(fd, "status") as QuoteStatus;
+  if (!QUOTE_STATUSES.includes(status)) done(`/quotes/${id}`, "Pick a status.");
+  const res = await db().from("quotes").update({ ...quoteFields(fd), status, updated_at: new Date().toISOString() }).eq("id", id);
+  if (res.error?.code === "23505") done(`/quotes/${id}`, "This company already has another open quote. Close that one first.");
+  if (res.error) throw new Error(res.error.message);
+  done(`/quotes/${id}`, "Saved.");
+}
+
+export async function addQuote(fd: FormData) {
+  const email = normalizeEmail(str(fd, "from_email"));
+  if (!isValidSyntax(email)) done("/quotes", "Enter their email address.");
+  const contact = await new SupabaseStore().findContactByEmail(email);
+  const now = new Date().toISOString();
+  const res = await db()
+    .from("quotes")
+    .insert({ ...quoteFields(fd), from_email: email, contact_id: contact?.id ?? null, company_id: contact?.company_id ?? null, reply_count: 0, first_reply_at: now, last_reply_at: now })
+    .select("id")
+    .single();
+  if (res.error?.code === "23505") done("/quotes", "That company already has an open quote. Open it from the list to update it.");
+  if (res.error) throw new Error(res.error.message);
+  done(`/quotes/${res.data.id}`, "Quote added.");
 }
 
 // ---- Manual run ----

@@ -23,6 +23,11 @@ const TONE: Record<string, "good" | "warn" | "bad" | ""> = {
   disposable: "bad",
   bounce: "bad",
   do_not_contact: "bad",
+  new: "warn",
+  quoting: "",
+  quoted: "",
+  won: "good",
+  lost: "bad",
 };
 
 export function Badge({ value }: { value: string | null | undefined }) {

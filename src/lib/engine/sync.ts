@@ -113,6 +113,15 @@ export async function syncInbox(store: Store, deps: EngineDeps, settings: Settin
         out.newReplies.push({ inbox: inbox.email, from, subject: msg.subject, snippet: msg.snippet.slice(0, 300) });
         if (contact) await store.stopContactEnrollments(contact.id, "replied");
         if (companyId) await store.stopCompany(companyId, "replied", `reply from ${from}`, "company_replied");
+        await store.recordQuoteReply({
+          company_id: companyId,
+          contact_id: contact?.id ?? null,
+          inbox_id: inbox.id,
+          from_email: from,
+          gmail_thread_id: msg.threadId,
+          snippet: msg.snippet.slice(0, 500),
+          at: msg.internalDate.toISOString(),
+        });
         break;
     }
   }

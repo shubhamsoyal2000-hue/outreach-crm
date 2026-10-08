@@ -19,7 +19,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const today = localDay(new Date(), settings.default_timezone);
   const todayStr = ymdToString(today);
 
-  const [inboxStats, seqStats, replies, unverified] = await Promise.all([
+  const [inboxStats, seqStats, replies, unverified, newQuotes] = await Promise.all([
     db().from("inbox_stats").select("*"),
     db().from("sequence_stats").select("*"),
     db()
@@ -30,6 +30,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       .order("occurred_at", { ascending: false })
       .limit(25),
     db().from("contacts").select("id", { count: "exact", head: true }).eq("verification_status", "unverified"),
+    db().from("quotes").select("id", { count: "exact", head: true }).eq("status", "new"),
   ]);
   const statsById = new Map(((inboxStats.data ?? []) as InboxStat[]).map((s) => [s.inbox_id, s]));
   const todayCounts = await Promise.all(inboxes.map((i) => store.countSentOnDay(i.id, todayStr)));
@@ -52,6 +53,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <h1>Dashboard</h1>
       <Flash msg={msg} />
       {warnings.map((w) => <Flash key={w} msg={w} kind="warn" />)}
+      {!!newQuotes.count && (
+        <div className="notice">
+          <strong>{newQuotes.count} new {newQuotes.count === 1 ? "reply is" : "replies are"} waiting for a quote.</strong>{" "}
+          <Link href="/quotes?status=new">Open quotes</Link>
+        </div>
+      )}
 
       <div className="panel">
         <div className="row" style={{ alignItems: "center" }}>

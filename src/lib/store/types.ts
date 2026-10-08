@@ -19,6 +19,16 @@ export interface NewMessage {
   occurred_at: string;
 }
 
+export interface ReplyForQuote {
+  company_id: string | null;
+  contact_id: string | null;
+  inbox_id: string;
+  from_email: string;
+  gmail_thread_id: string;
+  snippet: string;
+  at: string;
+}
+
 export interface NewEnrollment {
   sequence_id: string;
   contact_id: string;
@@ -63,6 +73,8 @@ export interface Store {
   stopCompany(companyId: string, status: Company["status"], reason: string, stopReason: string): Promise<void>;
   stopContactEnrollments(contactId: string, stopReason: string): Promise<void>;
   addSuppression(s: { email?: string; domain?: string; reason: string; note?: string }): Promise<void>;
+  /** Opens a quote for the company (or sender), or adds the reply to its open one. */
+  recordQuoteReply(r: ReplyForQuote): Promise<void>;
 
   activeEnrollmentCounts(): Promise<Record<string, number>>;
   createEnrollments(rows: NewEnrollment[]): Promise<number>;

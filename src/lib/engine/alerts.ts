@@ -32,7 +32,7 @@ export function buildAlert(replies: ReplyEvent[], problems: InboxProblem[], appU
     for (const r of replies) {
       parts.push([`From: ${r.from}`, `To inbox: ${r.inbox}`, `Subject: ${r.subject}`, `"${r.snippet}"`].join("\n"));
     }
-    parts.push("Answer them from the inbox they wrote to, so it stays in the same thread.");
+    parts.push(`Answer them from the inbox they wrote to, so it stays in the same thread. Track the quote: ${appUrl}/quotes`);
   }
   if (problems.length) {
     parts.push(problems.length === 1 ? "An inbox stopped sending:" : "These inboxes stopped sending:");

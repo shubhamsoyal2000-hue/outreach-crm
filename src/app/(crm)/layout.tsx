@@ -7,6 +7,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
       <nav className="nav">
         <div className="brand">Outreach CRM</div>
         <Link href="/">Dashboard</Link>
+        <Link href="/quotes">Quotes</Link>
         <Link href="/contacts">Leads</Link>
         <Link href="/sequences">Sequences</Link>
         <Link href="/inboxes">Inboxes</Link>

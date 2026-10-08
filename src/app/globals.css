@@ -50,7 +50,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 600; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
-input[type=text], input[type=number], input[type=date], input[type=password], textarea, select {
+input[type=text], input[type=email], input[type=number], input[type=date], input[type=password], textarea, select {
   width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--text);
 }
 textarea { min-height: 140px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
@@ -59,7 +59,7 @@ textarea { min-height: 140px; font-family: ui-monospace, SFMono-Regular, Menlo, 
 button, .button {
   font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--text); background: var(--text); color: #fff; cursor: pointer; text-decoration: none; display: inline-block;
 }
-button.secondary { background: #fff; color: var(--text); border-color: var(--line); }
+button.secondary, .button.secondary { background: #fff; color: var(--text); border-color: var(--line); }
 button.danger { background: var(--bad); border-color: var(--bad); }
 .nav button { background: transparent; border-color: #55554f; color: #d9d9d4; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }

@@ -53,6 +53,28 @@ export interface Company {
   facts: Record<string, string>;
 }
 
+export type QuoteStatus = "new" | "quoting" | "quoted" | "won" | "lost";
+export const QUOTE_STATUSES: QuoteStatus[] = ["new", "quoting", "quoted", "won", "lost"];
+
+export interface Quote {
+  id: string;
+  company_id: string | null;
+  contact_id: string | null;
+  inbox_id: string | null;
+  from_email: string;
+  gmail_thread_id: string | null;
+  status: QuoteStatus;
+  lane_from: string;
+  lane_to: string;
+  equipment: string;
+  rate_quoted: number | null;
+  notes: string;
+  reply_count: number;
+  last_reply_snippet: string;
+  first_reply_at: string;
+  last_reply_at: string;
+}
+
 export interface Contact {
   id: string;
   company_id: string | null;

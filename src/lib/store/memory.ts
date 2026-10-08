@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { domainAndParents, emailDomain } from "../email-rules";
-import type { Company, Contact, DueItem, Enrollment, Inbox, SequenceStep, Settings, VerificationStatus } from "../types";
-import type { EnrollCandidate, NewEnrollment, NewMessage, Store } from "./types";
+import type { Company, Contact, DueItem, Enrollment, Inbox, Quote, SequenceStep, Settings, VerificationStatus } from "../types";
+import type { EnrollCandidate, NewEnrollment, NewMessage, ReplyForQuote, Store } from "./types";
 
 export const DEFAULT_SETTINGS: Settings = {
   sending_enabled: false,
@@ -41,6 +41,7 @@ export class MemoryStore implements Store {
   enrollments: Enrollment[] = [];
   messages: StoredMessage[] = [];
   suppressions: { email?: string; domain?: string; reason: string }[] = [];
+  quotes: Quote[] = [];
 
   async getSettings() { return this.settings; }
   async listInboxes() { return this.inboxes.map((i) => ({ ...i })); }
@@ -113,6 +114,22 @@ export class MemoryStore implements Store {
   async getContact(id: string) { return this.contacts.find((c) => c.id === id) ?? null; }
   async findContactByEmail(email: string) { return this.contacts.find((c) => c.email === email) ?? null; }
   async findCompanyByDomain(domain: string) { return this.companies.find((c) => c.domain === domain) ?? null; }
+
+  async recordQuoteReply(r: ReplyForQuote) {
+    const open = this.quotes.find(
+      (q) => !["won", "lost"].includes(q.status) && (r.company_id ? q.company_id === r.company_id : !q.company_id && q.from_email === r.from_email),
+    );
+    if (!open) {
+      this.quotes.push({
+        id: randomUUID(), company_id: r.company_id, contact_id: r.contact_id, inbox_id: r.inbox_id, from_email: r.from_email,
+        gmail_thread_id: r.gmail_thread_id, status: "new", lane_from: "", lane_to: "", equipment: "", rate_quoted: null, notes: "",
+        reply_count: 1, last_reply_snippet: r.snippet, first_reply_at: r.at, last_reply_at: r.at,
+      });
+      return;
+    }
+    open.reply_count++;
+    if (r.at >= open.last_reply_at) Object.assign(open, { last_reply_at: r.at, last_reply_snippet: r.snippet, gmail_thread_id: r.gmail_thread_id, inbox_id: r.inbox_id });
+  }
 
   async stopCompany(companyId: string, status: Company["status"], reason: string, stopReason: string) {
     void reason;
