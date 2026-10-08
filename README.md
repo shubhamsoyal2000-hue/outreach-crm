@@ -31,7 +31,7 @@ This is Phase 1 of the roadmap: the sending system.
 2. Deploy to Vercel from this repository and set the variables in `.env.example`.
 3. In Google Cloud (see the Phase 0 checklist), add `https://YOUR-APP/api/oauth/google/callback` as an authorised redirect URL.
 4. Run `supabase/scheduler.sql` in Supabase with your URL, so the app checks inboxes and sends every 5 minutes. It creates a random scheduler secret in Supabase Vault that the app checks directly, so nothing needs copying into Vercel.
-5. Sign in, fill in Settings (company name and postal address), connect each inbox, set its sender name, signature and cold start
+5. Sign in, fill in Settings (company name, postal address and the alert email that hears about replies and inbox problems), connect each inbox, set its sender name, signature and cold start
    date, then resume it. Import leads, create a sequence, edit its copy, activate it, enroll leads, and turn sending on.
 
 A free @gmail.com account works for testing only if you add it as a test user on the OAuth consent screen. For real outreach, use

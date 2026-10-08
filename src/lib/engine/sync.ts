@@ -6,9 +6,18 @@ import type { Contact, Enrollment, Inbox, Settings } from "../types";
 import { MailerError, type EngineDeps } from "./ports";
 import { recipientTimezone } from "./send";
 
+export interface ReplyEvent {
+  inbox: string;
+  from: string;
+  subject: string;
+  snippet: string;
+}
+
 export interface SyncOutcome {
   inbox: string;
   replies: number;
+  /** Replies seen for the first time in this pass, for the alert email. */
+  newReplies: ReplyEvent[];
   bounces: number;
   autoReplies: number;
   optOuts: number;
@@ -25,7 +34,7 @@ const OVERLAP_MS = 10 * 60_000;
  * Mail that matches none of our contacts (including warm-up traffic) is ignored.
  */
 export async function syncInbox(store: Store, deps: EngineDeps, settings: Settings, inbox: Inbox): Promise<SyncOutcome> {
-  const out: SyncOutcome = { inbox: inbox.email, replies: 0, bounces: 0, autoReplies: 0, optOuts: 0 };
+  const out: SyncOutcome = { inbox: inbox.email, replies: 0, newReplies: [], bounces: 0, autoReplies: 0, optOuts: 0 };
   if (inbox.status === "disconnected" || !inbox.refresh_token_enc) return out;
   const now = deps.now();
   const since = inbox.last_synced_at
@@ -101,6 +110,7 @@ export async function syncInbox(store: Store, deps: EngineDeps, settings: Settin
         break;
       case "reply":
         out.replies++;
+        out.newReplies.push({ inbox: inbox.email, from, subject: msg.subject, snippet: msg.snippet.slice(0, 300) });
         if (contact) await store.stopContactEnrollments(contact.id, "replied");
         if (companyId) await store.stopCompany(companyId, "replied", `reply from ${from}`, "company_replied");
         break;

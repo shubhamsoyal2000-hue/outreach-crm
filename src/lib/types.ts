@@ -14,6 +14,8 @@ export interface Settings {
   opt_out_line: string;
   /** Email info@, sales@ style shared inboxes (no-reply, abuse, hr... stay blocked). */
   allow_shared_inboxes: boolean;
+  /** Where reply and inbox-problem alerts go. Empty turns alerts off. */
+  alert_email: string;
   default_timezone: string;
   send_window_start_hour: number;
   send_window_end_hour: number;

@@ -8,8 +8,9 @@ export interface OutgoingEmail {
   body: string;
   inReplyTo?: string | null;
   references?: string | null;
-  listUnsubscribeUrl: string;
-  listUnsubscribeMailto: string;
+  /** Omitted for internal alerts, which are not marketing email. */
+  listUnsubscribeUrl?: string;
+  listUnsubscribeMailto?: string;
 }
 
 function needsEncoding(s: string): boolean {
@@ -62,9 +63,10 @@ export function buildRawMessage(email: OutgoingEmail): string {
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=UTF-8",
     "Content-Transfer-Encoding: quoted-printable",
-    `List-Unsubscribe: <${email.listUnsubscribeUrl}>, <${email.listUnsubscribeMailto}>`,
-    "List-Unsubscribe-Post: List-Unsubscribe=One-Click",
   ];
+  if (email.listUnsubscribeUrl && email.listUnsubscribeMailto) {
+    headers.push(`List-Unsubscribe: <${email.listUnsubscribeUrl}>, <${email.listUnsubscribeMailto}>`, "List-Unsubscribe-Post: List-Unsubscribe=One-Click");
+  }
   if (email.inReplyTo) headers.push(`In-Reply-To: ${email.inReplyTo}`);
   if (email.references) headers.push(`References: ${email.references}`);
   return `${headers.join("\r\n")}\r\n\r\n${quotedPrintable(email.body)}`;

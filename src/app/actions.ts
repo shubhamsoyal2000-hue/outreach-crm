@@ -8,8 +8,7 @@ import { parseLeadsCsv } from "@/lib/csv-import";
 import { domainFromWebsite, normalizeEmail, isValidSyntax } from "@/lib/email-rules";
 import { productionDeps } from "@/lib/engine";
 import { enrollContacts } from "@/lib/engine/enroll";
-import { runSendPass } from "@/lib/engine/send";
-import { runSyncPass } from "@/lib/engine/sync";
+import { runTick } from "@/lib/engine/tick";
 import { saveLeads } from "@/lib/import-leads";
 import { newSessionToken, SESSION_COOKIE, sessionMaxAge } from "@/lib/session";
 import { db, SupabaseStore } from "@/lib/store/supabase";
@@ -63,12 +62,15 @@ export async function saveSettings(fd: FormData) {
   if (end <= start) done("/settings", "The sending window must end after it starts.");
   const postal = str(fd, "postal_address");
   if (postal && !looksLikePostalAddress(postal)) done("/settings", "Enter the full postal address (street, city, state and ZIP). US law requires a real mailing address, not just a ZIP code.");
+  const alertEmail = normalizeEmail(str(fd, "alert_email"));
+  if (alertEmail && !isValidSyntax(alertEmail)) done("/settings", "The alert email address doesn't look right.");
   await must(
     db().from("settings").update({
       company_name: str(fd, "company_name"),
       postal_address: str(fd, "postal_address"),
       opt_out_line: str(fd, "opt_out_line") || "Not the right person or not interested? Click here and I won't email again:",
       allow_shared_inboxes: str(fd, "allow_shared_inboxes") === "1",
+      alert_email: alertEmail,
       default_timezone: str(fd, "default_timezone") || "America/New_York",
       send_window_start_hour: start,
       send_window_end_hour: end,
@@ -294,8 +296,7 @@ export async function enrollBatch(fd: FormData) {
 export async function runNow() {
   const store = new SupabaseStore();
   const deps = productionDeps();
-  const sync = await runSyncPass(store, deps);
-  const send = await runSendPass(store, deps);
+  const { sync, send } = await runTick(store, deps, env.appUrl);
   const sent = send.filter((s) => s.result === "sent").length;
   const replies = sync.reduce((n, s) => n + s.replies, 0);
   const why = send.find((s) => s.result !== "sent");
