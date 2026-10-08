@@ -22,6 +22,8 @@ export class MailerError extends Error {
   constructor(
     public code: MailerErrorCode,
     message: string,
+    /** True when Gmail itself rejected the access token, not the token refresh. */
+    public fromGmailApi = false,
   ) {
     super(message);
   }

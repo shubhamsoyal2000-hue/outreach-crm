@@ -60,6 +60,22 @@ async function accessToken(inbox: Inbox): Promise<string> {
   return t.access_token;
 }
 
+/**
+ * Runs a Gmail call, and if Google rejects the access token (401) gets a fresh
+ * one and tries once more. A cached token can be revoked before it expires, and
+ * one rejected token must not mark the inbox disconnected while the saved
+ * connection still works. A 401 means nothing was sent, so the retry is safe.
+ */
+async function withToken<T>(inbox: Inbox, run: (token: string) => Promise<T>): Promise<T> {
+  try {
+    return await run(await accessToken(inbox));
+  } catch (err) {
+    if (!(err instanceof MailerError && err.code === "auth" && err.fromGmailApi)) throw err;
+    tokenCache.delete(inbox.id);
+    return run(await accessToken(inbox));
+  }
+}
+
 async function gmail<T>(token: string, path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     ...init,
@@ -74,7 +90,7 @@ async function gmail<T>(token: string, path: string, init?: RequestInit): Promis
   } catch {
     reason = text.slice(0, 200);
   }
-  if (res.status === 401) throw new MailerError("auth", reason);
+  if (res.status === 401) throw new MailerError("auth", reason, true);
   if (res.status === 429 || /rateLimit|dailyLimit|quota/i.test(reason)) throw new MailerError("rate_limit", reason);
   if (res.status === 403) throw new MailerError("suspended", reason);
   throw new MailerError("other", `Gmail HTTP ${res.status} ${reason}`);
@@ -106,50 +122,52 @@ async function getMetadata(token: string, id: string): Promise<GmailMessage> {
 
 export const gmailMailer: Mailer = {
   async send(inbox, raw, threadId): Promise<SentMessage> {
-    const token = await accessToken(inbox);
-    const sent = await gmail<GmailMessage>(token, "/messages/send", {
-      method: "POST",
-      body: JSON.stringify({ raw: toBase64Url(raw), ...(threadId ? { threadId } : {}) }),
+    return withToken(inbox, async (token) => {
+      const sent = await gmail<GmailMessage>(token, "/messages/send", {
+        method: "POST",
+        body: JSON.stringify({ raw: toBase64Url(raw), ...(threadId ? { threadId } : {}) }),
+      });
+      // Gmail writes its own Message-ID; follow-ups need it for In-Reply-To.
+      let rfcMessageId: string | null = null;
+      try {
+        rfcMessageId = headerMap(await getMetadata(token, sent.id))["message-id"] ?? null;
+      } catch {
+        rfcMessageId = null;
+      }
+      return { messageId: sent.id, threadId: sent.threadId, rfcMessageId };
     });
-    // Gmail writes its own Message-ID; follow-ups need it for In-Reply-To.
-    let rfcMessageId: string | null = null;
-    try {
-      rfcMessageId = headerMap(await getMetadata(token, sent.id))["message-id"] ?? null;
-    } catch {
-      rfcMessageId = null;
-    }
-    return { messageId: sent.id, threadId: sent.threadId, rfcMessageId };
   },
 
   async listInbound(inbox, since): Promise<FetchedMessage[]> {
-    const token = await accessToken(inbox);
-    const q = `after:${Math.floor(since.getTime() / 1000)} -in:sent -in:drafts -in:chats`;
-    const ids: string[] = [];
-    let pageToken: string | undefined;
-    do {
-      const page = await gmail<{ messages?: { id: string }[]; nextPageToken?: string }>(
-        token,
-        `/messages?maxResults=100&q=${encodeURIComponent(q)}${pageToken ? `&pageToken=${pageToken}` : ""}`,
-      );
-      ids.push(...(page.messages ?? []).map((m) => m.id));
-      pageToken = page.nextPageToken;
-    } while (pageToken && ids.length < 500);
+    return withToken(inbox, async (token) => {
+      const q = `after:${Math.floor(since.getTime() / 1000)} -in:sent -in:drafts -in:chats`;
+      const ids: string[] = [];
+      let pageToken: string | undefined;
+      do {
+        const page = await gmail<{ messages?: { id: string }[]; nextPageToken?: string }>(
+          token,
+          `/messages?maxResults=100&q=${encodeURIComponent(q)}${pageToken ? `&pageToken=${pageToken}` : ""}`,
+        );
+        ids.push(...(page.messages ?? []).map((m) => m.id));
+        pageToken = page.nextPageToken;
+      } while (pageToken && ids.length < 500);
 
-    const out: FetchedMessage[] = [];
-    for (const id of ids.reverse()) {
-      const m = await getMetadata(token, id);
-      const h = headerMap(m);
-      out.push({
-        id: m.id,
-        threadId: m.threadId,
-        from: h["from"] ?? "",
-        subject: h["subject"] ?? "",
-        snippet: m.snippet ?? "",
-        headers: h,
-        internalDate: new Date(Number(m.internalDate ?? Date.now())),
-      });
-    }
-    return out;
+      const out: FetchedMessage[] = [];
+      for (const id of ids.reverse()) {
+        const m = await getMetadata(token, id);
+        const h = headerMap(m);
+        out.push({
+          id: m.id,
+          threadId: m.threadId,
+          from: h["from"] ?? "",
+          subject: h["subject"] ?? "",
+          snippet: m.snippet ?? "",
+          headers: h,
+          internalDate: new Date(Number(m.internalDate ?? Date.now())),
+        });
+      }
+      return out;
+    });
   },
 };
 
