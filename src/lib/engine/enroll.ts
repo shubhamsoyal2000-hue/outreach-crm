@@ -10,9 +10,9 @@ export interface EnrollSummary {
 const BLOCKED_VERIFICATION = new Set(["invalid", "disposable", "risky"]);
 
 /** Someone we emailed by hand (see the Gmail history import) waits this long before the first sequence email. */
-export const COOL_OFF_DAYS = 21;
+export const COOL_OFF_DAYS = 5;
 
-/** The first send: now, or 3 weeks after the last time we emailed them by hand. */
+/** The first send: now, or 5 days after the last time we emailed them by hand. */
 export function firstSendAt(contact: { fields: Record<string, string> }, now: Date): Date {
   const last = contact.fields?.last_emailed ? new Date(`${contact.fields.last_emailed}T00:00:00Z`) : null;
   if (!last || Number.isNaN(last.getTime())) return now;

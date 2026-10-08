@@ -302,11 +302,12 @@ describe("enrollment", () => {
 });
 
 describe("enrolling people we emailed by hand", () => {
-  it("waits 3 weeks after the last manual email before the first sequence email", async () => {
+  it("waits 5 days after the last manual email before the first sequence email", async () => {
     const { firstSendAt } = await import("@/lib/engine/enroll");
     const now = new Date("2026-10-08T14:00:00Z");
     expect(firstSendAt({ fields: {} }, now)).toEqual(now);
-    expect(firstSendAt({ fields: { last_emailed: "2026-10-01" } }, now).toISOString()).toBe("2026-10-22T00:00:00.000Z");
+    expect(firstSendAt({ fields: { last_emailed: "2026-10-06" } }, now).toISOString()).toBe("2026-10-11T00:00:00.000Z");
+    expect(firstSendAt({ fields: { last_emailed: "2026-10-01" } }, now)).toEqual(now);
     expect(firstSendAt({ fields: { last_emailed: "2026-08-01" } }, now)).toEqual(now);
     expect(firstSendAt({ fields: { last_emailed: "not a date" } }, now)).toEqual(now);
   });

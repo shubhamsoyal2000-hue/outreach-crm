@@ -326,7 +326,7 @@ export async function enrollBatch(fd: FormData) {
   done(
     `/sequences/${sequenceId}`,
     `Enrolled ${summary.enrolled} contacts.${skipped.length ? ` Skipped: ${skipped.join(", ")}.` : ""}` +
-      " Anyone you emailed by hand in the last 3 weeks waits until 3 weeks have passed.",
+      " Anyone you emailed by hand in the last 5 days waits until 5 days have passed.",
   );
 }
 
