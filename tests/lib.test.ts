@@ -170,3 +170,19 @@ describe("company name in emails", () => {
     expect(templateVars(contact, co("Valmet Inc"), { sender_name: "Marcus Jones" }).company).toBe("Valmet Inc");
   });
 });
+
+describe("company type from the domain", () => {
+  it("tells importers, forwarders and carriers apart", async () => {
+    const { guessCompanyKind } = await import("@/lib/company-kind");
+    expect(guessCompanyKind("valmet.com")).toBe("importer");
+    expect(guessCompanyKind("danfoss.com")).toBe("importer");
+    expect(guessCompanyKind("jas.com")).toBe("forwarder");
+    expect(guessCompanyKind("am.kwe.com")).toBe("forwarder");
+    expect(guessCompanyKind("acmelogistics.com")).toBe("forwarder");
+    expect(guessCompanyKind("scarbroughglobal.com")).toBe("forwarder");
+    expect(guessCompanyKind("caribetrans.com")).toBe("forwarder");
+    expect(guessCompanyKind("bigrigtrucking.com")).toBe("carrier");
+    expect(guessCompanyKind("jbhunt.com")).toBe("carrier");
+    expect(guessCompanyKind("cbp.dhs.gov")).toBe("other");
+  });
+});
