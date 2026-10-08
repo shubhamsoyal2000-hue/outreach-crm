@@ -14,6 +14,8 @@ export interface HistoryScan {
   messages_read: number;
   sent_estimate: number | null;
   error: string | null;
+  /** What the scan saw, for the progress table: messages listed, opened, and how each was read. */
+  stats?: Record<string, number>;
 }
 
 export interface ListedMessage {
@@ -88,20 +90,20 @@ function sentRow(inbox: Inbox, m: HistoryMessage): StoredHistoryMessage | null {
   };
 }
 
-function inboundRow(inbox: Inbox, m: HistoryMessage, threadRecipients: string[]): StoredHistoryMessage | null {
+function inboundRow(inbox: Inbox, m: HistoryMessage, threadRecipients: string[]): { row: StoredHistoryMessage | null; seen: string } {
   const from = m.headers["from"] ?? "";
   const cls = classifyInbound({ from, subject: m.headers["subject"] ?? "", snippet: m.snippet, headers: m.headers });
   const base = { inbox_id: inbox.id, gmail_message_id: m.id, thread_id: m.threadId, names: {}, occurred_at: m.internalDate.toISOString() };
   if (cls.kind === "bounce") {
-    if (!cls.hardBounce) return null;
+    if (!cls.hardBounce) return { row: null, seen: "soft_bounce" };
     const targets = bounceTargets(m.headers["x-failed-recipients"], `${m.headers["subject"] ?? ""}\n${m.snippet}`, threadRecipients);
-    return targets.length ? { ...base, kind: "bounce", addresses: targets } : null;
+    return targets.length ? { row: { ...base, kind: "bounce", addresses: targets }, seen: "bounce" } : { row: null, seen: "bounce_unmatched" };
   }
   const sender = parseAddress(from);
-  if (!sender || sender === inbox.email) return null;
-  if (cls.kind === "reply") return { ...base, kind: "reply", addresses: [sender] };
-  if (cls.kind === "unsubscribe_reply") return { ...base, kind: "opt_out", addresses: [sender] };
-  return null; // out-of-office and the like say nothing about the address
+  if (!sender || sender === inbox.email) return { row: null, seen: "own" };
+  if (cls.kind === "reply") return { row: { ...base, kind: "reply", addresses: [sender] }, seen: "reply" };
+  if (cls.kind === "unsubscribe_reply") return { row: { ...base, kind: "opt_out", addresses: [sender] }, seen: "opt_out" };
+  return { row: null, seen: cls.kind }; // out-of-office and the like say nothing about the address
 }
 
 /**
@@ -111,7 +113,8 @@ function inboundRow(inbox: Inbox, m: HistoryMessage, threadRecipients: string[])
  * Nothing in the mailbox is changed.
  */
 export async function runScanStep(store: HistoryStore, reader: HistoryReader, inbox: Inbox, scan: HistoryScan, deadline: number): Promise<HistoryScan> {
-  const s = { ...scan };
+  const s = { ...scan, stats: { ...(scan.stats ?? {}) } };
+  const count = (k: string, n = 1) => (s.stats[k] = (s.stats[k] ?? 0) + n);
   if (s.status === "queued") {
     s.status = "running";
     await store.updateScan(inbox.id, { status: "running" });
@@ -125,11 +128,18 @@ export async function runScanStep(store: HistoryStore, reader: HistoryReader, in
       if (phase === "sent") {
         const msgs = await reader.get(inbox, page.messages.map((m) => m.id));
         rows = msgs.map((m) => sentRow(inbox, m)).filter((r): r is StoredHistoryMessage => !!r);
+        count("sent", rows.length);
       } else {
         const threads = await store.sentThreads(inbox.id, [...new Set(page.messages.map((m) => m.threadId))]);
         const wanted = phase === "bounces" ? page.messages : page.messages.filter((m) => threads.has(m.threadId));
         const msgs = await reader.get(inbox, wanted.map((m) => m.id));
-        rows = msgs.map((m) => inboundRow(inbox, m, threads.get(m.threadId) ?? [])).filter((r): r is StoredHistoryMessage => !!r);
+        count(`${phase}_listed`, page.messages.length);
+        count(`${phase}_opened`, msgs.length);
+        for (const m of msgs) {
+          const { row, seen } = inboundRow(inbox, m, threads.get(m.threadId) ?? []);
+          count(`${phase}_${seen}`);
+          if (row) rows.push(row);
+        }
       }
       await store.saveMessages(rows);
 
@@ -141,7 +151,7 @@ export async function runScanStep(store: HistoryStore, reader: HistoryReader, in
         s.phase = NEXT[phase];
         s.page_token = null;
       }
-      await store.updateScan(inbox.id, { phase: s.phase, page_token: s.page_token, messages_read: s.messages_read, sent_estimate: s.sent_estimate });
+      await store.updateScan(inbox.id, { phase: s.phase, page_token: s.page_token, messages_read: s.messages_read, sent_estimate: s.sent_estimate, stats: s.stats });
     }
     if (s.phase === "done") {
       s.status = "done";
