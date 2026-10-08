@@ -1,4 +1,4 @@
-import { emailDomain, isFreemailDomain, isValidSyntax, normalizeEmail, precheck } from "../email-rules";
+import { domainAndParents, emailDomain, isFreemailDomain, isValidSyntax, normalizeEmail, precheck } from "../email-rules";
 
 export interface ParsedAddress {
   email: string;
@@ -50,7 +50,7 @@ export function carrierReason(email: string): string | null {
   if (isFreemailDomain(domain)) {
     return CARRIER_FREEMAIL_LOCAL.test(local)
       ? "personal email with a trucking-style name"
-      : "personal email (Gmail, Yahoo...), usually a carrier or dispatcher rather than a shipper";
+      : "personal address (Gmail, Yahoo, QQ...): could be a carrier, a dispatcher or an overseas agent";
   }
   if (CARRIER_LOCAL.test(local)) return `"${local}@" is a carrier-style inbox`;
   if (CARRIER_DOMAIN.test(label)) return `company name "${label}" sounds like a carrier`;
@@ -89,12 +89,15 @@ export interface ClassifyOptions {
   ownDomains: string[];
   companyToken: string;
   allowShared: boolean;
+  /** Domains on the Do not email list. */
+  blockedDomains?: string[];
 }
 
 /** Sorts every address we wrote to into the groups the review page shows. */
 export function classifyHistory(rows: HistoryAddressRow[], o: ClassifyOptions): ClassifiedAddress[] {
   const own = new Set(o.ownEmails.map(normalizeEmail));
   const ownDomains = new Set(o.ownDomains);
+  const blocked = new Set(o.blockedDomains ?? []);
   const recentSince = o.now.getTime() - o.recentDays * 86_400_000;
 
   // A reply from anyone at a company domain counts for their colleagues too.
@@ -109,6 +112,7 @@ export function classifyHistory(rows: HistoryAddressRow[], o: ClassifyOptions): 
     if (own.has(r.email) || ownDomains.has(domain) || (o.companyToken && domain.replace(/[^a-z0-9]/g, "").includes(o.companyToken))) {
       return at("internal", "your own team");
     }
+    if (domainAndParents(domain).some((d) => blocked.has(d))) return at("internal", "company is on your Do not email list");
     const check = precheck(r.email, { allowShared: o.allowShared });
     if (!check.ok) return at("internal", check.reason === "role" ? "no-reply or system inbox" : `not usable (${check.reason})`);
 

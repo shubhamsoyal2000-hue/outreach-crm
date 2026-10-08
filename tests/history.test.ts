@@ -24,7 +24,8 @@ describe("history parsing", () => {
     expect(carrierReason("dispatch@fastlane.com")).toMatch(/carrier-style/);
     expect(carrierReason("ops@bigrigtrucking.com")).toMatch(/sounds like a carrier/);
     expect(carrierReason("mike.trucking22@gmail.com")).toMatch(/trucking-style/);
-    expect(carrierReason("jane@gmail.com")).toMatch(/personal email/);
+    expect(carrierReason("jane@gmail.com")).toMatch(/personal address/);
+    expect(carrierReason("agent@qq.com")).toMatch(/personal address/);
     expect(carrierReason("jane@acmeimports.com")).toBeNull();
     expect(carrierReason("ops@globallogistics.com")).toBeNull();
   });
@@ -44,7 +45,7 @@ const row = (email: string, over: Partial<HistoryAddressRow> = {}): HistoryAddre
 });
 
 describe("history groups", () => {
-  const opts = { now: NOW, recentDays: 92, ownEmails: ["sales.cargosolutionllc@gmail.com", "me@gmail.com"], ownDomains: ["cargosolutionllc.com"], companyToken: "cargosolution", allowShared: true };
+  const opts = { now: NOW, recentDays: 92, ownEmails: ["sales.cargosolutionllc@gmail.com", "me@gmail.com"], ownDomains: ["cargosolutionllc.com"], companyToken: "cargosolution", allowShared: true, blockedDomains: ["expeditors.com"] };
 
   it("sorts every address into the right group", () => {
     const out = classifyHistory(
@@ -59,6 +60,7 @@ describe("history groups", () => {
         row("marcus@cargosolution.net"),
         row("me@gmail.com"),
         row("noreply@delta.com"),
+        row("ops@us.expeditors.com"),
       ],
       opts,
     );
@@ -73,6 +75,7 @@ describe("history groups", () => {
       "marcus@cargosolution.net": "internal",
       "me@gmail.com": "internal",
       "noreply@delta.com": "internal",
+      "ops@us.expeditors.com": "internal",
     });
   });
 });

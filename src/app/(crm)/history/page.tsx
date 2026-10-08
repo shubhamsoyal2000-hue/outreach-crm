@@ -29,12 +29,12 @@ const GROUPS: { key: HistoryGroup; title: string; what: string; button?: string;
   { key: "older", title: "Delivered before that", what: "Delivered, but long enough ago that people may have moved on. They're imported as leads and checked by the verifier before their first email.", button: "Import as leads" },
   {
     key: "carrier",
-    title: "Looks like a carrier or dispatcher",
-    what: "Trucking-style names and personal Gmail or Yahoo addresses. Nothing here is imported unless you tick it, so tick only the shippers and forwarders.",
+    title: "Personal addresses and possible carriers",
+    what: "Trucking-style names, and personal Gmail, Yahoo or QQ addresses. Nothing here is imported unless you tick it, so tick only the shippers, forwarders and agents you want to email.",
     button: "Import ticked as leads",
     pickMode: true,
   },
-  { key: "internal", title: "Your team and system addresses", what: "Your own inboxes and colleagues, plus no-reply and system addresses. These are never imported." },
+  { key: "internal", title: "Your team, blocked companies and system addresses", what: "Your own inboxes and colleagues, companies on your Do not email list, and no-reply or system addresses. These are never imported." },
 ];
 
 function day(iso: string | null): string {

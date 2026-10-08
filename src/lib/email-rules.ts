@@ -63,6 +63,10 @@ const FREEMAIL_DOMAINS = new Set([
   "gmail.com", "googlemail.com", "yahoo.com", "ymail.com", "hotmail.com", "outlook.com",
   "live.com", "msn.com", "aol.com", "icloud.com", "me.com", "mac.com", "comcast.net",
   "att.net", "sbcglobal.net", "verizon.net", "proton.me", "protonmail.com", "gmx.com", "zoho.com",
+  "yahoo.co.in", "yahoo.com.cn", "hotmail.co.uk", "live.cn", "rediffmail.com",
+  // Common overseas providers that freight agents use.
+  "qq.com", "163.com", "126.com", "foxmail.com", "sina.com", "sina.cn", "sohu.com", "yeah.net", "aliyun.com", "139.com",
+  "naver.com", "hanmail.net", "daum.net", "yandex.ru", "mail.ru", "gmx.de", "web.de",
 ]);
 
 /** Personal mailbox providers: their domain says nothing about the company. */
