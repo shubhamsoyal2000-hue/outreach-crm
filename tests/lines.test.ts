@@ -53,6 +53,8 @@ describe("no longer monitored", () => {
     const msg = (subject: string, snippet: string) => ({ from: "a@acme.com", subject, snippet, headers: {} });
     expect(classifyInbound(msg("Automatic reply: hi", "This email address is no longer monitored.")).notMonitored).toBe(true);
     expect(classifyInbound(msg("Out of office", "Jane has left the company. Please write to ops@acme.com")).notMonitored).toBe(true);
+    expect(classifyInbound(msg("Réponse automatique : port trucking", "please use below email address for any request : EVAIcustomerservice@acme.com")).notMonitored).toBe(true);
+    expect(classifyInbound(msg("Automatic reply: hi", "I am out of the office until Monday.")).notMonitored).toBeUndefined();
     expect(classifyInbound(msg("Re: drayage and FTL for Acme", "We are no longer working with brokers, sorry")).kind).toBe("reply");
     expect(classifyInbound(msg("Re: drayage and FTL for Acme", "Send me a rate for Savannah to Atlanta")).kind).toBe("reply");
   });
