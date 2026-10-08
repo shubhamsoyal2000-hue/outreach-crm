@@ -103,7 +103,6 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                     <td>{inboxes.find((i) => i.id === s.inbox_id)?.email ?? "removed inbox"}</td>
                     <td>
                       {s.status === "error" ? <span style={{ color: "var(--bad)" }}>{s.error}</span> : s.status === "queued" ? "waiting to start" : PHASE[s.phase]}
-                      {s.status === "running" && s.phase === "sent" && s.sent_estimate ? <span className="muted small"> (about {s.sent_estimate} sent emails)</span> : null}
                     </td>
                     <td className="num">{s.messages_read}</td>
                     <td>{s.since}</td>

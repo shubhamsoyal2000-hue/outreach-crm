@@ -7,7 +7,7 @@ export const maxDuration = 60;
 /** Called every minute by the scheduler; does nothing unless a Gmail history scan is in progress. */
 async function history(request: Request) {
   if (!(await cronAuthorized(request))) return Response.json({ error: "unauthorized" }, { status: 401 });
-  const scans = await runHistoryPass(40_000);
+  const scans = await runHistoryPass(30_000);
   return Response.json({ at: new Date().toISOString(), scans });
 }
 
