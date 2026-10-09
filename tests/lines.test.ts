@@ -55,6 +55,11 @@ describe("no longer monitored", () => {
     expect(classifyInbound(msg("Out of office", "Jane has left the company. Please write to ops@acme.com")).notMonitored).toBe(true);
     expect(classifyInbound(msg("Réponse automatique : port trucking", "please use below email address for any request : EVAIcustomerservice@acme.com")).notMonitored).toBe(true);
     expect(classifyInbound(msg("Automatic reply: hi", "I am out of the office until Monday.")).notMonitored).toBeUndefined();
+    // Away for a while with a stand-in: the address still works, so it is not suppressed.
+    const away = classifyInbound(msg("Automatic reply: hi", "I am currently out of the office and will return on Oct. 26 2026. Please contact Steve Chang at steve@acme.com during my absence."));
+    expect(away.kind).toBe("auto_reply");
+    expect(away.notMonitored).toBeUndefined();
+    expect(classifyInbound(msg("Automatic reply: hi", "I will be out of the office from 10/5-10/9. For immediate assistance please email help@acme.com")).notMonitored).toBeUndefined();
     expect(classifyInbound(msg("Re: drayage and FTL for Acme", "We are no longer working with brokers, sorry")).kind).toBe("reply");
     expect(classifyInbound(msg("Re: drayage and FTL for Acme", "Send me a rate for Savannah to Atlanta")).kind).toBe("reply");
   });

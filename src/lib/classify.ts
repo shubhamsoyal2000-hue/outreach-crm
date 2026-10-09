@@ -37,6 +37,9 @@ const NOT_MONITORED = /(no longer (being )?(monitored|checked|in use|active|vali
 // "Please use the address below for any request: x@acme.com"
 const REDIRECT = /(please (use|contact|write to|e-?mail|reach out to|send (it |your (request|email|message)s? )?to|direct (all |your )?(requests|inquiries|emails) to)|for (any|all) (requests|inquiries|questions)[ ,:]+(please )?(contact|use|e-?mail))/i;
 const EMAIL = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
+// "Out of the office until the 26th, please contact Steve": the person is coming back,
+// so a redirect in a note like this does not mean the address is dead.
+const TEMPORARY = /(out of (the )?office|\bOOO\b|on (annual |parental |maternity |paternity )?(vacation|holiday|leave|pto)|away from (the |my )?(office|desk)|(will|shall) (be )?(return|back)|returning (on|to)|back (in the office )?on|during my absence|in my absence|while i am (away|out)|limited access to (my )?e-?mail|travell?ing)/i;
 
 /** True when an auto-reply says nobody reads this address any more. */
 export function isNotMonitored(text: string): boolean {
@@ -72,7 +75,7 @@ export function classifyInbound(msg: InboundMessage): Classification {
     // A real reply keeps our "Re:" subject; a short "I'm away" note under a new subject is an auto-reply.
     (!/^re:/i.test(msg.subject) && AUTO_BODY.test(msg.snippet) && msg.snippet.length < 400);
   if (isAuto) {
-    const elsewhere = isNotMonitored(text) || (REDIRECT.test(text) && EMAIL.test(text));
+    const elsewhere = isNotMonitored(text) || (REDIRECT.test(text) && EMAIL.test(text) && !TEMPORARY.test(text));
     return { kind: "auto_reply", ...(elsewhere ? { notMonitored: true } : {}) };
   }
   // Some servers send "no longer monitored" notes without auto-reply headers; they are not real replies.
