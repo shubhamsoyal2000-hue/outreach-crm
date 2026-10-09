@@ -1,6 +1,6 @@
 import { Badge, Flash } from "@/components/ui";
 import { db } from "@/lib/store/supabase";
-import { addSuppression } from "../../actions";
+import { addSuppression, removeSuppression } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,7 @@ export default async function SuppressionsPage({ searchParams }: { searchParams:
         <h2>{total.count ?? 0} entries</h2>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Email or domain</th><th>Reason</th><th>Note</th><th>Added</th></tr></thead>
+            <thead><tr><th>Email or domain</th><th>Reason</th><th>Note</th><th>Added</th><th></th></tr></thead>
             <tbody>
               {(rows.data ?? []).map((s) => (
                 <tr key={s.id}>
@@ -35,6 +35,14 @@ export default async function SuppressionsPage({ searchParams }: { searchParams:
                   <td><Badge value={s.reason} /></td>
                   <td className="small muted">{s.note}</td>
                   <td className="small">{new Date(s.created_at).toLocaleDateString("en-US")}</td>
+                  <td>
+                    {s.reason === "manual" && (
+                      <form action={removeSuppression}>
+                        <input type="hidden" name="id" value={s.id} />
+                        <button type="submit" className="secondary">Remove</button>
+                      </form>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

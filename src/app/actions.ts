@@ -188,6 +188,16 @@ export async function addSuppression(fd: FormData) {
   );
 }
 
+/**
+ * Takes a manual entry off the list, for example one added by mistake. Unsubscribes
+ * and bounces stay: the law and sender reputation both need them kept.
+ */
+export async function removeSuppression(fd: FormData) {
+  const id = str(fd, "id");
+  const { data } = await must(db().from("suppressions").delete().eq("id", id).eq("reason", "manual").select("email, domain"));
+  done("/suppressions", data?.length ? `${data[0].email ?? data[0].domain} can be emailed again.` : "Only entries added by hand or by the app's not-monitored check can be removed.");
+}
+
 // ---- Sequences ----
 
 // Uses the fields the ImportInfo collector fills in, each with a fallback so a lead missing one still gets a sensible email.
