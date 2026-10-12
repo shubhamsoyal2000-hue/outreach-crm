@@ -206,3 +206,21 @@ describe("verification groups", () => {
     expect(checkedBy(null)).toBe("");
   });
 });
+
+describe("spin", () => {
+  it("picks one option per choice, keeping placeholders with fallbacks intact", async () => {
+    const { spin, spinCount } = await import("@/lib/template");
+    const t = "[[Hi|Hello]] {{first_name|there}}, [[who books trucks at {{company|your office}}?|is that you?]]";
+    expect(spinCount(t)).toBe(4);
+    const outs = new Set(Array.from({ length: 40 }, (_, i) => spin(t, `c${i}`)));
+    expect(outs.size).toBe(4);
+    expect([...outs].every((o) => /^(Hi|Hello) \{\{first_name\|there\}\}, (who books trucks at \{\{company\|your office\}\}\?|is that you\?)$/.test(o))).toBe(true);
+    expect(spin(t, "same")).toBe(spin(t, "same"));
+  });
+
+  it("tidies the gap an empty option leaves", async () => {
+    const { spin } = await import("@/lib/template");
+    const outs = new Set(Array.from({ length: 20 }, (_, i) => spin("Quote it today [[|for you]].", `s${i}`)));
+    expect(outs).toEqual(new Set(["Quote it today.", "Quote it today for you."]));
+  });
+});

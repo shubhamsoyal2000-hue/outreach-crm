@@ -111,6 +111,10 @@ export class MemoryStore implements Store {
     return true;
   }
 
+  async copyAlreadySent(hash: string) {
+    return this.messages.some((m) => m.kind === "sent" && m.copy_hash === hash);
+  }
+
   async findEnrollmentByThread(inboxId: string, threadId: string) {
     return this.enrollments.find((e) => e.inbox_id === inboxId && e.gmail_thread_id === threadId) ?? null;
   }

@@ -1,4 +1,4 @@
-import { render, tidyName } from "./template";
+import { render, spin, tidyName } from "./template";
 import type { Company, Contact, Enrollment, Inbox, SequenceStep, Settings } from "./types";
 
 export interface ComposeInput {
@@ -9,10 +9,12 @@ export interface ComposeInput {
   enrollment: Pick<Enrollment, "subject_variant" | "thread_subject" | "gmail_thread_id">;
   step: SequenceStep;
   unsubscribeUrl: string;
+  /** Changes which [[a|b]] wording is picked; bumped when a version was already sent to someone else. */
+  salt?: number;
 }
 
 export type Composed =
-  | { ok: true; subject: string; body: string; newThread: boolean }
+  | { ok: true; subject: string; body: string; newThread: boolean; /** The step's own wording, without signature or footer. */ copy: string }
   | { ok: false; missing: string[] };
 
 /** A company "name" that is only its web address (e.g. "acme.com") reads badly in an email, so the fallback is used instead. */
@@ -57,8 +59,10 @@ export function composeEmail(input: ComposeInput): Composed {
     subjectTemplate = null;
   }
 
-  const subject = subjectTemplate ? render(subjectTemplate, vars) : { text: `Re: ${enrollment.thread_subject}`, missing: [] };
-  const body = render(step.body, vars);
+  // Seeded by contact and step, so a retry of the same email reads the same.
+  const seed = `${contact.id}:${step.step_number}:${input.salt ?? 0}`;
+  const subject = subjectTemplate ? render(spin(subjectTemplate, `${seed}:subject`), vars) : { text: `Re: ${enrollment.thread_subject}`, missing: [] };
+  const body = render(spin(step.body, seed), vars);
   const missing = [...new Set([...subject.missing, ...body.missing])];
   if (missing.length) return { ok: false, missing };
 
@@ -70,5 +74,5 @@ export function composeEmail(input: ComposeInput): Composed {
   ].join("\n");
 
   const text = [body.text.trim(), signature, footer].filter(Boolean).join("\n\n");
-  return { ok: true, subject: subject.text.trim(), body: text, newThread };
+  return { ok: true, subject: subject.text.trim(), body: text, newThread, copy: body.text.trim() };
 }

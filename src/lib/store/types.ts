@@ -16,6 +16,8 @@ export interface NewMessage {
   from_email?: string | null;
   subject?: string | null;
   snippet?: string | null;
+  /** copyHash of a sent email's wording. */
+  copy_hash?: string | null;
   occurred_at: string;
 }
 
@@ -65,6 +67,8 @@ export interface Store {
   updateContactVerification(id: string, status: VerificationStatus, detail: string | null, at: Date): Promise<void>;
   /** Returns false when the Gmail message was already recorded. */
   recordMessage(m: NewMessage): Promise<boolean>;
+  /** True when an email with this exact wording (copyHash) has already been sent. */
+  copyAlreadySent(hash: string): Promise<boolean>;
 
   findEnrollmentByThread(inboxId: string, threadId: string): Promise<Enrollment | null>;
   getContact(id: string): Promise<Contact | null>;

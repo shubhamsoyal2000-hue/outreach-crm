@@ -1,5 +1,6 @@
 import { composeEmail } from "../compose";
 import { buildRawMessage } from "../mime";
+import { copyHash } from "../template";
 import type { Store } from "../store/types";
 import {
   addBusinessDays,
@@ -25,6 +26,7 @@ export type SendOutcome =
 
 const LOCK_MS = 2 * 60 * 1000;
 const DUE_BATCH = 25;
+const MAX_WORDING_TRIES = 20;
 
 export function recipientTimezone(item: Pick<DueItem, "contact" | "company">, settings: Settings): string {
   return item.contact.timezone || timezoneForState(item.company?.state) || settings.default_timezone;
@@ -166,17 +168,22 @@ async function tryItem(
     return null;
   }
 
-  const composed = composeEmail({
-    settings,
-    inbox,
-    contact,
-    company,
-    enrollment: e,
-    step,
-    unsubscribeUrl: deps.unsubscribeUrl(contact.id),
-  });
-  if (!composed.ok) {
-    await stop(`missing_field:${composed.missing.join(",")}`);
+  // No two emails go out with the same wording: if this version was already
+  // sent to someone, try the step's other [[a|b]] choices.
+  let composed: ReturnType<typeof composeEmail> | null = null;
+  let hash = "";
+  for (let salt = 0; salt < MAX_WORDING_TRIES; salt++) {
+    const attempt = composeEmail({ settings, inbox, contact, company, enrollment: e, step, unsubscribeUrl: deps.unsubscribeUrl(contact.id), salt });
+    if (!attempt.ok) {
+      await stop(`missing_field:${attempt.missing.join(",")}`);
+      return null;
+    }
+    hash = copyHash(attempt.copy);
+    if (!(await store.copyAlreadySent(hash))) { composed = attempt; break; }
+  }
+  if (!composed?.ok) {
+    // Every version has gone out already; the step needs more [[a|b]] choices.
+    await deferToNextDay(store, deps, e.id, now, tz, w);
     return null;
   }
 
@@ -214,6 +221,7 @@ async function tryItem(
     gmail_thread_id: sent.threadId,
     rfc_message_id: sent.rfcMessageId,
     subject: composed.subject,
+    copy_hash: hash,
     occurred_at: now.toISOString(),
   });
 

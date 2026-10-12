@@ -131,6 +131,12 @@ export class SupabaseStore implements Store {
     return true;
   }
 
+  async copyAlreadySent(hash: string) {
+    const res = await db().from("messages").select("id", { count: "exact", head: true }).eq("copy_hash", hash);
+    if (res.error) throw new Error(`copy check: ${res.error.message}`);
+    return (res.count ?? 0) > 0;
+  }
+
   async findEnrollmentByThread(inboxId: string, threadId: string) {
     const rows = check(await db().from("enrollments").select("*").eq("inbox_id", inboxId).eq("gmail_thread_id", threadId).limit(1), "thread lookup");
     return rows?.[0] ?? null;

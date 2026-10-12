@@ -72,7 +72,7 @@ describe("send pass", () => {
 
   it("spaces sends out instead of bursting", async () => {
     const { store, seqId, mailer, deps } = setup();
-    for (let i = 0; i < 3; i++) await enroll(store, seqId, addContact(store, addCompany(store, { domain: `co${i}.com` })));
+    for (let i = 0; i < 3; i++) await enroll(store, seqId, addContact(store, addCompany(store, { domain: `co${i}.com`, name: `Company ${i}` })));
     await runSendPass(store, deps);
     const second = await runSendPass(store, deps);
     expect(mailer.sent).toHaveLength(1);
@@ -83,7 +83,7 @@ describe("send pass", () => {
   it("stops at the warm-up cap for the day", async () => {
     const { store, seqId, mailer, deps } = setup();
     store.inboxes[0].cold_start_date = "2026-10-13"; // first day: cap 10
-    for (let i = 0; i < 12; i++) await enroll(store, seqId, addContact(store, addCompany(store, { domain: `co${i}.com` })));
+    for (let i = 0; i < 12; i++) await enroll(store, seqId, addContact(store, addCompany(store, { domain: `co${i}.com`, name: `Company ${i}` })));
     for (let i = 0; i < 12; i++) {
       store.inboxes[0].next_send_after = null;
       await runSendPass(store, deps);
@@ -155,6 +155,20 @@ describe("send pass", () => {
     expect(e).toMatchObject({ status: "stopped", stop_reason: "verification_failed" });
   });
 
+  it("never sends the same wording twice", async () => {
+    for (const [body, expectSent] of [["Hi {{first_name}}, one lane is all I need.", 1], ["[[Hi|Hello]] {{first_name}}, one lane is all I need.", 2]] as const) {
+      const { store, seqId, mailer, clock } = setup({ inboxes: 2 });
+      store.sequences[0].steps = [{ ...store.sequences[0].steps[0], body }];
+      const deps = makeDeps(mailer, clock);
+      for (let i = 0; i < 2; i++) {
+        await enroll(store, seqId, addContact(store, addCompany(store, { domain: `d${i}.com` })), i);
+        await runSendPass(store, deps);
+      }
+      expect(mailer.sent).toHaveLength(expectSent);
+      if (expectSent === 2) expect(new Set(mailer.sent.map((m) => bodyOf(m.raw).split("\n")[0])).size).toBe(2);
+    }
+  });
+
   it("holds unverified contacts when no verification API is set up", async () => {
     const { store, seqId, mailer, deps } = setup();
     const e = await enroll(store, seqId, addContact(store, addCompany(store), { verification_status: "unverified", verified_at: null }));
@@ -166,7 +180,7 @@ describe("send pass", () => {
   it("caps catch-all addresses at a share of the day's sends", async () => {
     const { store, seqId, mailer, deps } = setup(); // cap 24 on this day, 10% -> 2 catch-alls
     for (let i = 0; i < 4; i++) {
-      await enroll(store, seqId, addContact(store, addCompany(store, { domain: `c${i}.com` }), { verification_status: "catch_all" }));
+      await enroll(store, seqId, addContact(store, addCompany(store, { domain: `c${i}.com`, name: `Company ${i}` }), { verification_status: "catch_all" }));
     }
     for (let i = 0; i < 4; i++) {
       store.inboxes[0].next_send_after = null;
