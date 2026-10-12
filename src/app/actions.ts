@@ -120,7 +120,11 @@ export async function setInboxStatus(fd: FormData) {
     if (!data.refresh_token_enc) done("/inboxes", "Connect this inbox to Gmail first.");
     if (!data.sender_name || !data.cold_start_date) done("/inboxes", "Set the sender name and cold start date before resuming.");
   }
-  await must(db().from("inboxes").update({ status, paused_reason: status === "paused" ? "Paused by a team member." : null }).eq("id", id));
+  // Resuming after a bounce pause starts the bounce count fresh; otherwise the same old bounces pause it again at once.
+  const patch = status === "active"
+    ? { status, paused_reason: null, bounce_reset_at: new Date().toISOString() }
+    : { status, paused_reason: "Paused by a team member." };
+  await must(db().from("inboxes").update(patch).eq("id", id));
   done("/inboxes", status === "active" ? "Inbox resumed." : "Inbox paused.");
 }
 

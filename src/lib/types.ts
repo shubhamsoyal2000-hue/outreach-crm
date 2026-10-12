@@ -42,6 +42,8 @@ export interface Inbox {
   last_synced_at: string | null;
   last_sent_at: string | null;
   next_send_after: string | null;
+  /** Bounce checks only count sends after this time (set when a team member resumes the inbox). */
+  bounce_reset_at?: string | null;
 }
 
 export interface Company {

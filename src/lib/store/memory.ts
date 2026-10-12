@@ -60,8 +60,8 @@ export class MemoryStore implements Store {
     return { total: sent.length, catchAll: sent.filter((m) => m.catch_all).length };
   }
 
-  async recentBounceStats(inboxId: string, n: number) {
-    const sent = this.messages.filter((m) => m.inbox_id === inboxId && m.kind === "sent").slice(-n);
+  async recentBounceStats(inboxId: string, n: number, since?: string | null) {
+    const sent = this.messages.filter((m) => m.inbox_id === inboxId && m.kind === "sent" && (!since || m.occurred_at >= since)).slice(-n);
     const contacts = new Set(sent.map((m) => m.contact_id));
     const bounced = this.messages.filter((m) => m.inbox_id === inboxId && m.kind === "bounce" && contacts.has(m.contact_id)).length;
     return { sent: sent.length, bounced };

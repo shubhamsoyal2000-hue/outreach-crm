@@ -54,7 +54,8 @@ export interface Store {
 
   countSentOnDay(inboxId: string, sendDay: string): Promise<{ total: number; catchAll: number }>;
   /** Of this inbox's last `n` sends, how many have bounced. */
-  recentBounceStats(inboxId: string, n: number): Promise<{ sent: number; bounced: number }>;
+  /** Bounces among the last n sends, counting only sends after `since` when given. */
+  recentBounceStats(inboxId: string, n: number, since?: string | null): Promise<{ sent: number; bounced: number }>;
   dueItems(inboxId: string, now: Date, limit: number): Promise<DueItem[]>;
   isSuppressed(email: string): Promise<boolean>;
   /** True if any contact at this company got a first email on this day, from any inbox. */

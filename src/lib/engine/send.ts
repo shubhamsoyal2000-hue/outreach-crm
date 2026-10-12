@@ -64,7 +64,7 @@ export async function runInboxSend(store: Store, deps: EngineDeps, settings: Set
   const counts = await store.countSentOnDay(inbox.id, sendDay);
   if (counts.total >= cap) return skip(`daily cap of ${cap} reached`);
 
-  const health = await store.recentBounceStats(inbox.id, settings.bounce_window_sends);
+  const health = await store.recentBounceStats(inbox.id, settings.bounce_window_sends, inbox.bounce_reset_at);
   if (health.sent >= settings.bounce_min_sends && health.bounced / health.sent > settings.bounce_pause_rate) {
     const pct = ((health.bounced / health.sent) * 100).toFixed(1);
     const reason = `bounce rate ${pct}% over the last ${health.sent} sends is above ${(settings.bounce_pause_rate * 100).toFixed(1)}%`;

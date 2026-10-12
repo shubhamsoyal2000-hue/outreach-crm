@@ -186,6 +186,21 @@ describe("send pass", () => {
     expect(mailer.sent).toHaveLength(0);
   });
 
+  it("only counts bounces after the inbox was resumed", async () => {
+    const { store, deps, mailer, seqId } = setup();
+    const inbox = store.inboxes[0];
+    for (let i = 0; i < 30; i++) {
+      const c = addContact(store, null, { email: `x${i}@ex.com` });
+      store.messages.push({ id: `s${i}`, inbox_id: inbox.id, enrollment_id: null, contact_id: c.id, direction: "outbound", kind: "sent", send_day: "2026-10-08", gmail_message_id: `s${i}`, gmail_thread_id: null, occurred_at: "2026-10-08T15:00:00.000Z" });
+      if (i < 2) store.messages.push({ id: `b${i}`, inbox_id: inbox.id, enrollment_id: null, contact_id: c.id, direction: "inbound", kind: "bounce", gmail_message_id: `b${i}`, gmail_thread_id: null, occurred_at: "2026-10-08T15:01:00.000Z" });
+    }
+    inbox.bounce_reset_at = "2026-10-09T00:00:00.000Z";
+    await enroll(store, seqId, addContact(store, addCompany(store)));
+    const [out] = await runSendPass(store, deps);
+    expect(out.result).toBe("sent");
+    expect(mailer.sent).toHaveLength(1);
+  });
+
   it("marks the inbox disconnected when Gmail rejects its token", async () => {
     const { store, seqId, mailer, deps } = setup();
     await enroll(store, seqId, addContact(store, addCompany(store)));

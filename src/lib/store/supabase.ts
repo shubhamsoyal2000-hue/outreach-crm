@@ -62,11 +62,10 @@ export class SupabaseStore implements Store {
     return { total: total.count ?? 0, catchAll: catchAll.count ?? 0 };
   }
 
-  async recentBounceStats(inboxId: string, n: number) {
-    const sent = check(
-      await db().from("messages").select("contact_id").eq("inbox_id", inboxId).eq("kind", "sent").order("occurred_at", { ascending: false }).limit(n),
-      "recent sends",
-    ) ?? [];
+  async recentBounceStats(inboxId: string, n: number, since?: string | null) {
+    let q = db().from("messages").select("contact_id").eq("inbox_id", inboxId).eq("kind", "sent");
+    if (since) q = q.gte("occurred_at", since);
+    const sent = check(await q.order("occurred_at", { ascending: false }).limit(n), "recent sends") ?? [];
     const ids = [...new Set(sent.map((m: { contact_id: string | null }) => m.contact_id).filter(Boolean))] as string[];
     if (!ids.length) return { sent: 0, bounced: 0 };
     const bounced = await db().from("messages").select("id", { count: "exact", head: true }).eq("inbox_id", inboxId).eq("kind", "bounce").in("contact_id", ids);
