@@ -144,6 +144,17 @@ describe("send pass", () => {
     expect(header(mailer.sent[0].raw, "To")).toBe("good@acme.com");
   });
 
+  it("verifies unchecked addresses before a follow-up too", async () => {
+    const { store, seqId, mailer, clock } = setup();
+    const deps = makeDeps(mailer, clock, { verify: async () => ({ status: "invalid", detail: "invalid / ok" }) });
+    const contact = addContact(store, addCompany(store), { verification_status: "unverified", verified_at: null });
+    const e = await enroll(store, seqId, contact);
+    Object.assign(e, { next_step: 2, gmail_thread_id: "t1", thread_subject: "furniture into Savannah" });
+    await runSendPass(store, deps);
+    expect(mailer.sent).toHaveLength(0);
+    expect(e).toMatchObject({ status: "stopped", stop_reason: "verification_failed" });
+  });
+
   it("holds unverified contacts when no verification API is set up", async () => {
     const { store, seqId, mailer, deps } = setup();
     const e = await enroll(store, seqId, addContact(store, addCompany(store), { verification_status: "unverified", verified_at: null }));

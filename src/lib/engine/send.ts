@@ -135,33 +135,35 @@ async function tryItem(
     return null;
   }
 
-  let catchAll = false;
   if (e.next_step === 1) {
     // One first email per company per day, so a company never gets a burst.
     if (company && (await store.companyFirstTouchOnDay(company.id, ctx.sendDay))) {
       await deferToNextDay(store, deps, e.id, now, tz, w);
       return null;
     }
-    // Verification gate: the first email only goes to an address checked recently.
-    let status = contact.verification_status;
-    const maxAgeMs = settings.verification_max_age_days * 86_400_000;
-    const fresh = contact.verified_at && now.getTime() - new Date(contact.verified_at).getTime() <= maxAgeMs;
-    if (status === "unverified" || !fresh) {
-      if (!deps.verifier) return null; // waits until a verification API key is configured
-      const result = await deps.verifier.verify(contact.email, { allowShared: settings.allow_shared_inboxes });
-      status = result.status;
-      await store.updateContactVerification(contact.id, result.status, result.detail, now);
-    }
-    if (status === "catch_all") {
-      catchAll = true;
-      if (ctx.counts.catchAll >= Math.floor(ctx.cap * settings.catch_all_max_share)) {
-        await deferToNextDay(store, deps, e.id, now, tz, w);
-        return null;
-      }
-    } else if (status !== "valid") {
-      await stop("verification_failed");
+  }
+
+  // Verification gate: every email, follow-ups included, only goes to an address checked recently.
+  let status = contact.verification_status;
+  const maxAgeMs = settings.verification_max_age_days * 86_400_000;
+  const fresh = contact.verified_at && now.getTime() - new Date(contact.verified_at).getTime() <= maxAgeMs;
+  if (status === "unverified" || !fresh) {
+    if (!deps.verifier) return null; // waits until a verification API key is configured
+    const result = await deps.verifier.verify(contact.email, { allowShared: settings.allow_shared_inboxes });
+    status = result.status;
+    await store.updateContactVerification(contact.id, result.status, result.detail, now);
+  }
+  let catchAll = false;
+  if (status === "catch_all") {
+    catchAll = true;
+    // Catch-all domains can't be confirmed, so only a small share of each day's first emails go to them.
+    if (e.next_step === 1 && ctx.counts.catchAll >= Math.floor(ctx.cap * settings.catch_all_max_share)) {
+      await deferToNextDay(store, deps, e.id, now, tz, w);
       return null;
     }
+  } else if (status !== "valid") {
+    await stop("verification_failed");
+    return null;
   }
 
   const composed = composeEmail({
