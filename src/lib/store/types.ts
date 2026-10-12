@@ -86,4 +86,8 @@ export interface Store {
 
   activeEnrollmentCounts(): Promise<Record<string, number>>;
   createEnrollments(rows: NewEnrollment[]): Promise<number>;
+  /** The active sequence marked auto_enroll, if any. */
+  autoEnrollSequenceId(): Promise<string | null>;
+  /** Contacts at active importers with an approved opening line who are in no sequence yet. */
+  researchedCandidates(): Promise<EnrollCandidate[]>;
 }

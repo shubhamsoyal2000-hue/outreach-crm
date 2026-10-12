@@ -3,7 +3,7 @@ import { Badge, Flash } from "@/components/ui";
 import { composeEmail } from "@/lib/compose";
 import { db, SupabaseStore } from "@/lib/store/supabase";
 import type { Company, Contact, SequenceStep } from "@/lib/types";
-import { addStep, deleteLastStep, enrollBatch, saveStep, setSequenceStatus } from "../../../actions";
+import { addStep, deleteLastStep, enrollBatch, saveStep, setAutoEnroll, setSequenceStatus } from "../../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +78,17 @@ export default async function SequencePage({ params, searchParams }: { params: P
         <p className="small muted" style={{ marginTop: 8 }}>
           Enrolling only queues people. Each inbox still sends no more than its daily limit, so a big batch simply takes more days.
         </p>
+        <form action={setAutoEnroll} className="row" style={{ marginTop: 14, alignItems: "center" }}>
+          <input type="hidden" name="sequence_id" value={id} />
+          <input type="hidden" name="on" value={seq.data.auto_enroll ? "" : "1"} />
+          <div className="small">
+            <strong>Auto-enroll researched importers: {seq.data.auto_enroll ? "On" : "Off"}.</strong>{" "}
+            {seq.data.auto_enroll
+              ? "Every hour, importers with an opening line who are in no sequence yet are added here."
+              : "Turn on to add importers with an opening line here every hour, without clicking Enroll."}
+          </div>
+          <div style={{ flex: "0 0 auto" }}><button type="submit" className="secondary">{seq.data.auto_enroll ? "Turn off" : "Turn on"}</button></div>
+        </form>
       </div>
 
       {(steps.data ?? []).map((step: SequenceStep & { id: string }) => {

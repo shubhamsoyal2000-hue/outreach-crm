@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runSendPass } from "@/lib/engine/send";
 import { runSyncPass } from "@/lib/engine/sync";
 import { enrollContacts } from "@/lib/engine/enroll";
+import { runAutoEnroll } from "@/lib/engine/auto-enroll";
 import { MailerError } from "@/lib/engine/ports";
 import { localParts } from "@/lib/time";
 import { addCompany, addContact, bodyOf, enroll, FakeMailer, header, makeDeps, seed } from "./helpers";
@@ -352,5 +353,35 @@ describe("enrolling people we emailed by hand", () => {
     expect(firstSendAt({ fields: { last_emailed: "2026-10-01" } }, now)).toEqual(now);
     expect(firstSendAt({ fields: { last_emailed: "2026-08-01" } }, now)).toEqual(now);
     expect(firstSendAt({ fields: { last_emailed: "not a date" } }, now)).toEqual(now);
+  });
+});
+
+describe("auto-enroll", () => {
+  it("enrolls importers with an approved opening line who are in no sequence yet", async () => {
+    const { store, seqId } = setup();
+    store.sequences[0].auto_enroll = true;
+    store.sequences.push({ id: "other-seq", status: "active", steps: [] });
+    const researched = addCompany(store, { facts: { custom_line: "Saw your new Dallas DC." } });
+    const fresh = addContact(store, researched);
+    const elsewhere = addContact(store, researched);
+    await store.createEnrollments([{ sequence_id: "other-seq", contact_id: elsewhere.id, inbox_id: store.inboxes[0].id, subject_variant: "a", next_send_at: TUE_10AM_ET.toISOString() }]);
+    addContact(store, researched, { verification_status: "invalid" });
+    addContact(store, addCompany(store, { domain: "plain.com" }));
+    addContact(store, addCompany(store, { domain: "fwd.com", kind: "forwarder", facts: { custom_line: "x" } }));
+
+    const out = await runAutoEnroll(store, TUE_10AM_ET);
+    expect(out).toMatchObject({ sequence_id: seqId, enrolled: 1 });
+    expect(store.enrollments.filter((e) => e.sequence_id === seqId).map((e) => e.contact_id)).toEqual([fresh.id]);
+
+    expect(await runAutoEnroll(store, TUE_10AM_ET)).toMatchObject({ enrolled: 0 });
+  });
+
+  it("does nothing while the auto-enroll sequence is paused", async () => {
+    const { store } = setup();
+    store.sequences[0].auto_enroll = true;
+    store.sequences[0].status = "paused";
+    addContact(store, addCompany(store, { facts: { custom_line: "Saw your new Dallas DC." } }));
+    expect(await runAutoEnroll(store, TUE_10AM_ET)).toEqual({ skipped: "no active auto-enroll sequence" });
+    expect(store.enrollments).toHaveLength(0);
   });
 });

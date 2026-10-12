@@ -286,6 +286,15 @@ export async function setSequenceStatus(fd: FormData) {
   done(`/sequences/${sequenceId}`, status === "active" ? "Sequence is active." : "Sequence paused. No emails from it will go out.");
 }
 
+/** Only one sequence auto-enrolls at a time, so turning it on here turns it off everywhere else. */
+export async function setAutoEnroll(fd: FormData) {
+  const sequenceId = str(fd, "sequence_id");
+  const on = str(fd, "on") === "1";
+  if (on) await must(db().from("sequences").update({ auto_enroll: false }).neq("id", sequenceId));
+  await must(db().from("sequences").update({ auto_enroll: on }).eq("id", sequenceId));
+  done(`/sequences/${sequenceId}`, on ? "Auto-enroll is on. Researched importers join this sequence every hour." : "Auto-enroll is off.");
+}
+
 const ENROLL_WHO = ["importers_researched", "importers_with_data", "importers", "forwarders", "all"] as const;
 type EnrollWho = (typeof ENROLL_WHO)[number];
 

@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env } from "../config";
 import { domainAndParents, emailDomain } from "../email-rules";
 import type { Company, Contact, DueItem, Enrollment, Inbox, SequenceStep, Settings, VerificationStatus } from "../types";
-import type { NewEnrollment, NewMessage, ReplyForQuote, Store } from "./types";
+import type { EnrollCandidate, NewEnrollment, NewMessage, ReplyForQuote, Store } from "./types";
 
 let client: SupabaseClient | null = null;
 
@@ -252,5 +252,32 @@ export class SupabaseStore implements Store {
       created += check(res, "create enrollments")?.length ?? 0;
     }
     return created;
+  }
+  async autoEnrollSequenceId() {
+    const res = await db().from("sequences").select("id").eq("auto_enroll", true).eq("status", "active").order("created_at").limit(1);
+    return check(res, "auto-enroll sequence")?.[0]?.id ?? null;
+  }
+
+  async researchedCandidates() {
+    const companies = check(
+      await db().from("companies").select("*").eq("status", "active").or("kind.is.null,kind.eq.importer").not("facts->>custom_line", "is", null),
+      "researched companies",
+    ) as Company[];
+    const byId = new Map(companies.map((c) => [c.id, c]));
+    const out: EnrollCandidate[] = [];
+    const ids = [...byId.keys()];
+    for (let i = 0; i < ids.length; i += 100) {
+      const contacts = check(
+        await db().from("contacts").select("*").in("company_id", ids.slice(i, i + 100)).in("verification_status", ["valid", "catch_all", "unverified"]),
+        "researched contacts",
+      ) as Contact[];
+      for (let j = 0; j < contacts.length; j += 100) {
+        const chunk = contacts.slice(j, j + 100);
+        const enrolled = check(await db().from("enrollments").select("contact_id").in("contact_id", chunk.map((c) => c.id)), "existing enrollments") as { contact_id: string }[];
+        const taken = new Set(enrolled.map((e) => e.contact_id));
+        for (const contact of chunk) if (!taken.has(contact.id)) out.push({ contact, company: byId.get(contact.company_id!) ?? null, alreadyEnrolled: false });
+      }
+    }
+    return out;
   }
 }

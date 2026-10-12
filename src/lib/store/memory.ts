@@ -27,7 +27,10 @@ interface Sequence {
   id: string;
   status: "draft" | "active" | "paused";
   steps: SequenceStep[];
+  auto_enroll?: boolean;
 }
+
+const READY_TO_ENROLL: VerificationStatus[] = ["valid", "catch_all", "unverified"];
 
 type StoredMessage = NewMessage & { id: string };
 
@@ -186,6 +189,22 @@ export class MemoryStore implements Store {
       });
     }
     return rows.length;
+  }
+
+  async autoEnrollSequenceId() {
+    return this.sequences.find((s) => s.auto_enroll && s.status === "active")?.id ?? null;
+  }
+
+  async researchedCandidates() {
+    const enrolled = new Set(this.enrollments.map((e) => e.contact_id));
+    const out: EnrollCandidate[] = [];
+    for (const contact of this.contacts) {
+      const company = this.companies.find((c) => c.id === contact.company_id) ?? null;
+      if (!company || company.status !== "active" || (company.kind ?? "importer") !== "importer" || !company.facts?.custom_line) continue;
+      if (enrolled.has(contact.id) || !READY_TO_ENROLL.includes(contact.verification_status)) continue;
+      out.push({ contact, company, alreadyEnrolled: false });
+    }
+    return out;
   }
 
   candidates(sequenceId: string, contactIds: string[]): EnrollCandidate[] {
