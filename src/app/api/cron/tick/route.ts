@@ -13,7 +13,9 @@ async function tick(request: Request) {
   const store = new SupabaseStore();
   const deps = productionDeps();
   const result = await runTick(store, deps, env.appUrl);
-  return Response.json({ at: new Date().toISOString(), ...result });
+  // The commit Vercel built this from, so the scheduler log shows which version is live.
+  const commit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null;
+  return Response.json({ at: new Date().toISOString(), commit, ...result });
 }
 
 export const GET = tick;
