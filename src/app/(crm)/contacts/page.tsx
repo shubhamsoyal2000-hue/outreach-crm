@@ -68,7 +68,12 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
             <span dangerouslySetInnerHTML={{ __html: `<a class="button" href="${collectorBookmarklet()}" title="Drag me to your bookmarks bar">+ Add to CRM list</a>` }} />
           </li>
           <li>On importinfo.com, open a company page that lists email addresses and click the bookmark. It adds that page&apos;s emails to a list saved in your browser, fixing broken ones like &ldquo;ops expeditors.com&rdquo;.</li>
-          <li>Repeat on as many pages as you like, then click <strong>Download CSV</strong> in the box it shows and import the file above.</li>
+          <li>
+            <strong>To collect many at once,</strong> open a search results page that lists companies and click the bookmark, then{" "}
+            <strong>Start collecting</strong>. It opens each company by itself, 20 to 40 seconds apart, while you keep the tab open. It skips
+            companies it already collected and stops at 150 companies a day, or straight away if ImportInfo pushes back, to protect your account.
+          </li>
+          <li>Then click <strong>Download CSV</strong> in the box it shows and import the file above.</li>
         </ol>
         <p className="small muted">
           Each lead also gets the company&apos;s shipment facts, ready to use in emails with a fallback after the bar:{" "}

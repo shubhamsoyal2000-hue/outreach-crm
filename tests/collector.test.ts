@@ -12,6 +12,16 @@ interface Api {
   collectFromRows(company: string, rows: Row[], url?: string, facts?: Record<string, string>): { leads: Lead[]; skipped: { raw: string; reason: string }[] };
   toCsv(leads: Lead[]): string;
   merge(list: Lead[], leads: Lead[]): number;
+  companyLinks(doc: FakeDoc, pageUrl: string): { url: string; name: string }[];
+}
+
+type FakeLink = { href: string; text: string; inNav?: boolean };
+type FakeDoc = ReturnType<typeof fakeDoc>;
+function fakeDoc(links: FakeLink[]) {
+  return {
+    querySelectorAll: () =>
+      links.map((l) => ({ getAttribute: () => l.href, textContent: l.text, closest: () => (l.inNav ? {} : null) })),
+  };
 }
 
 function api(): Api {
@@ -119,6 +129,37 @@ describe("ImportInfo collector", () => {
     expect(row.state).toBe("IL");
     expect(row.timezone).toBe("America/Chicago");
     expect(row.fields).toMatchObject({ top_us_port: "Los Angeles, California", top_route_from: "Vung Tau Vietnam", shipments_90d: "32,490" });
+  });
+
+  it("finds the company links on a list page and ignores menus and paging", () => {
+    const doc = fakeDoc([
+      { href: "/pricing", text: "Pricing", inNav: true },
+      { href: "/acme-imports-inc", text: "ACME IMPORTS INC" },
+      { href: "https://www.importinfo.com/zeta-trading-co#top", text: "ZETA TRADING CO" },
+      { href: "/zeta-trading-co", text: "Zeta Trading Co" },
+      { href: "/blue-river-foods", text: "BLUE RIVER FOODS" },
+      { href: "/search?page=2", text: "Next" },
+      { href: "/search?page=3", text: "3" },
+      { href: "/about", text: "About us" },
+      { href: "https://other.com/acme", text: "ACME elsewhere" },
+      { href: "/results/abc", text: "Saved search" },
+    ]);
+    const links = api().companyLinks(doc, "https://www.importinfo.com/search?q=toys");
+    expect(links.map((l) => l.url)).toEqual([
+      "https://www.importinfo.com/acme-imports-inc",
+      "https://www.importinfo.com/zeta-trading-co",
+      "https://www.importinfo.com/blue-river-foods",
+    ]);
+    expect(links[0].name).toBe("ACME IMPORTS INC");
+  });
+
+  it("finds no list on a page with only a couple of links", () => {
+    const doc = fakeDoc([{ href: "/acme", text: "Acme" }, { href: "/zeta", text: "Zeta" }]);
+    expect(api().companyLinks(doc, "https://www.importinfo.com/")).toEqual([]);
+  });
+
+  it("parses as one script", () => {
+    expect(() => new Function(COLLECTOR_SOURCE)).not.toThrow();
   });
 
   it("builds a bookmark URL that is safe inside an href", () => {
