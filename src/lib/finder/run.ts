@@ -181,8 +181,9 @@ export async function queueSites(sites: FinderSite[], priority = 0): Promise<num
   return added;
 }
 
+/** New-company sites waiting; the low-priority re-reads of companies already in Leads don't hold back the directories. */
 async function pendingCount(): Promise<number> {
-  const res = await must(db().from("finder_sites").select("domain", { count: "exact", head: true }).eq("status", "pending"));
+  const res = await must(db().from("finder_sites").select("domain", { count: "exact", head: true }).eq("status", "pending").gte("priority", 0));
   return res.count ?? 0;
 }
 
