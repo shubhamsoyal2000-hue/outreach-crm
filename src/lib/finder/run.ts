@@ -5,7 +5,7 @@ import { parseLeadsCsv } from "../csv-import";
 import { domainFromWebsite } from "../email-rules";
 import { saveLeads } from "../import-leads";
 import { db } from "../store/supabase";
-import { directorySites, extractEmails, pagesWorthReading, robotsAllows, robotsDisallows, siteName, type FoundEmail } from "./extract";
+import { detailLinks, directorySites, extractEmails, pagesWorthReading, profileWebsite, robotsAllows, robotsDisallows, siteName, sitemapLocs, type FoundEmail } from "./extract";
 
 export interface FinderSite {
   domain: string;
@@ -23,6 +23,8 @@ interface FinderDirectory {
   next_page: number;
   last_page: number | null;
   sites_found: number;
+  mode: "list" | "sitemap";
+  detail_prefix: string | null;
 }
 
 export interface FinderPassOutcome {
@@ -56,7 +58,7 @@ async function getPage(url: string, deadline: number): Promise<{ html: string; f
     });
     if (!res.ok) return null;
     const type = res.headers.get("content-type") ?? "";
-    if (type && !/html|text\/plain/i.test(type)) return null;
+    if (type && !/html|text\/plain|xml/i.test(type)) return null;
     return { html: (await res.text()).slice(0, MAX_HTML), finalUrl: res.url || url };
   } catch {
     return null;
@@ -187,30 +189,101 @@ async function pendingCount(): Promise<number> {
   return res.count ?? 0;
 }
 
-/** Reads the next page of one directory and queues the company websites it links to. */
+async function queueProfilePages(dir: FinderDirectory, urls: string[]): Promise<number> {
+  let added = 0;
+  for (let i = 0; i < urls.length; i += 500) {
+    const res = await must(
+      db().from("finder_pages")
+        .upsert(urls.slice(i, i + 500).map((url) => ({ url, directory_id: dir.id })), { onConflict: "url", ignoreDuplicates: true })
+        .select("url"),
+    );
+    added += res.data?.length ?? 0;
+  }
+  return added;
+}
+
+/**
+ * Reads the next page of one directory. A plain list queues the company websites it links to; with
+ * a profile prefix it queues the directory's own profile pages instead, and a sitemap queues every
+ * profile page it names in one go.
+ */
 async function readDirectoryPage(deadline: number): Promise<boolean> {
   const res = await must(
-    db().from("finder_directories").select("id, label, url_template, kind, next_page, last_page, sites_found")
+    db().from("finder_directories").select("id, label, url_template, kind, next_page, last_page, sites_found, mode, detail_prefix")
       .eq("status", "active").order("checked_at", { ascending: true, nullsFirst: true }).limit(1),
   );
   const dir = (res.data ?? [])[0] as FinderDirectory | undefined;
   if (!dir) return false;
-  const url = dir.url_template.replace("{page}", String(dir.next_page));
+  const url = dir.mode === "sitemap" ? dir.url_template : dir.url_template.replace("{page}", String(dir.next_page));
   const page = await getPage(url, deadline);
   const now = new Date().toISOString();
   if (!page) {
-    await must(db().from("finder_directories").update({ status: "failed", error: `page ${dir.next_page} did not load`, checked_at: now }).eq("id", dir.id));
+    await must(db().from("finder_directories").update({ status: "failed", error: `${dir.mode === "sitemap" ? "sitemap" : `page ${dir.next_page}`} did not load`, checked_at: now }).eq("id", dir.id));
     return true;
   }
-  const sites = directorySites(page.html, url);
-  const added = await queueSites(sites.map((s) => ({ domain: s.domain, name: s.name, kind: dir.kind, source: "directory", source_ref: `${dir.label} p${dir.next_page}` })), 1);
-  const finished = !sites.length || (dir.last_page != null && dir.next_page >= dir.last_page);
+
+  if (dir.mode === "sitemap") {
+    const locs = sitemapLocs(page.html);
+    let pages = locs.pages;
+    for (const child of locs.sitemaps.slice(0, 10)) {
+      const sub = await getPage(child, deadline);
+      if (sub) pages = pages.concat(sitemapLocs(sub.html).pages);
+    }
+    const prefix = dir.detail_prefix ?? "/";
+    const profiles = pages.filter((p) => { try { return new URL(p).pathname.startsWith(prefix) && new URL(p).pathname !== prefix; } catch { return false; } });
+    const added = await queueProfilePages(dir, profiles);
+    await must(db().from("finder_directories").update({ status: "done", checked_at: now, error: profiles.length ? null : "sitemap listed no profile pages" }).eq("id", dir.id));
+    return added > 0;
+  }
+
+  let found: number;
+  let added: number;
+  if (dir.detail_prefix) {
+    const profiles = detailLinks(page.html, url, dir.detail_prefix);
+    found = profiles.length;
+    added = 0;
+    await queueProfilePages(dir, profiles);
+  } else {
+    const sites = directorySites(page.html, url);
+    found = sites.length;
+    added = await queueSites(sites.map((s) => ({ domain: s.domain, name: s.name, kind: dir.kind, source: "directory", source_ref: `${dir.label} p${dir.next_page}` })), 1);
+  }
+  const finished = !found || (dir.last_page != null && dir.next_page >= dir.last_page);
   await must(
     db().from("finder_directories").update({
       next_page: dir.next_page + 1, sites_found: dir.sites_found + added, checked_at: now, error: null, status: finished ? "done" : "active",
     }).eq("id", dir.id),
   );
   return true;
+}
+
+const PROFILE_BATCH = 8;
+
+/** Opens a batch of directory profile pages and queues the website each one shows. Returns how many pages were read. */
+async function readProfilePages(deadline: number): Promise<number> {
+  const now = new Date().toISOString();
+  const res = await must(
+    db().from("finder_pages").select("url, directory_id, finder_directories(label, kind)")
+      .eq("status", "pending").or(`lock_until.is.null,lock_until.lt.${now}`).order("created_at").limit(PROFILE_BATCH),
+  );
+  const rows = (res.data ?? []) as unknown as { url: string; directory_id: string; finder_directories: { label: string; kind: CompanyKind | null } | null }[];
+  if (!rows.length) return 0;
+  await must(db().from("finder_pages").update({ lock_until: new Date(Date.now() + 60_000).toISOString() }).in("url", rows.map((r) => r.url)));
+  await Promise.all(rows.map(async (r) => {
+    const page = await getPage(r.url, deadline);
+    const site = page ? profileWebsite(page.html, page.finalUrl) : null;
+    if (site) {
+      const added = await queueSites([{ domain: site.domain, name: site.name, kind: r.finder_directories?.kind ?? null, source: "directory", source_ref: r.finder_directories?.label ?? null }], 1);
+      if (added) {
+        const d = await must(db().from("finder_directories").select("sites_found").eq("id", r.directory_id).single());
+        await must(db().from("finder_directories").update({ sites_found: ((d.data as { sites_found: number }).sites_found ?? 0) + added }).eq("id", r.directory_id));
+      }
+    }
+    await must(db().from("finder_pages").update({
+      status: !page ? "failed" : site ? "done" : "no_site", domain: site?.domain ?? null, lock_until: null, checked_at: new Date().toISOString(),
+    }).eq("url", r.url));
+  }));
+  return rows.length;
 }
 
 /** One scheduler call: tops up the queue from directories when it runs low, then reads websites until the time budget is spent. */
@@ -222,7 +295,10 @@ export async function runFinderPass(budgetMs: number): Promise<FinderPassOutcome
   let room = s.dailySites - (await sitesReadToday());
   if (room <= 0) return { ...out, stopped: "daily limit reached" };
 
-  if ((await pendingCount()) < QUEUE_LOW && (await readDirectoryPage(deadline))) out.directoryPages++;
+  if ((await pendingCount()) < QUEUE_LOW) {
+    if (await readDirectoryPage(deadline)) out.directoryPages++;
+    out.directoryPages += await readProfilePages(Math.min(deadline, Date.now() + 15_000));
+  }
 
   while (room > 0 && deadline - Date.now() > 12_000) {
     const sites = await claimSites(Math.min(PARALLEL, room), budgetMs + 30_000);

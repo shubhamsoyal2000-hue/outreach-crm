@@ -216,3 +216,50 @@ export function robotsAllows(disallows: string[], path: string): boolean {
     return new RegExp("^" + re).test(path);
   });
 }
+
+/** Page URLs listed in a sitemap (or child sitemaps, for a sitemap index). */
+export function sitemapLocs(xml: string): { pages: string[]; sitemaps: string[] } {
+  const pages: string[] = [];
+  const sitemaps: string[] = [];
+  for (const m of xml.matchAll(/<(url|sitemap)\b[^>]*>[\s\S]*?<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
+    (m[1].toLowerCase() === "sitemap" ? sitemaps : pages).push(decodeEntities(m[2]));
+  }
+  return { pages, sitemaps };
+}
+
+/** Same-site links whose path starts with the profile-page prefix ("/exhibitors/"), not the prefix page itself. */
+export function detailLinks(html: string, pageUrl: string, prefix: string): string[] {
+  const here = new URL(pageUrl);
+  const host = here.host.replace(/^www\./, "");
+  const out = new Set<string>();
+  for (const a of anchors(html)) {
+    let u: URL;
+    try { u = new URL(a.href, pageUrl); } catch { continue; }
+    if (u.host.replace(/^www\./, "") !== host || !u.pathname.startsWith(prefix) || u.pathname.replace(/\/+$/, "") === prefix.replace(/\/+$/, "")) continue;
+    u.hash = "";
+    out.add(u.href);
+  }
+  return [...out];
+}
+
+/**
+ * The company's own website on a directory profile page: an outbound link shown as a web
+ * address or labelled "website". Footer links to partner sites are plain names, so they are skipped.
+ */
+export function profileWebsite(html: string, pageUrl: string): { domain: string; name: string } | null {
+  const dirRoot = new URL(pageUrl).host.replace(/^www\./, "").split(".").slice(-2).join(".");
+  for (const a of anchors(html)) {
+    let u: URL;
+    try { u = new URL(a.href, pageUrl); } catch { continue; }
+    if (!/^https?:$/.test(u.protocol)) continue;
+    const domain = domainFromWebsite(u.host);
+    if (!domain || domain === dirRoot || domain.endsWith("." + dirRoot) || NOT_COMPANY_SITES.test(domain) || isFreemailDomain(domain)) continue;
+    const text = a.text.toLowerCase();
+    const looksLikeAddress = /^(https?:\/\/|www\.)/.test(text) || text.replace(/\/$/, "") === domain || text.endsWith("." + domain.split(".").pop());
+    if (!looksLikeAddress && !/\b(web ?site|visit site|homepage)\b/.test(text)) continue;
+    const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+    const name = h1 ? stripTags(h1[1]).trim().slice(0, 120) : siteName(html);
+    return { domain, name };
+  }
+  return null;
+}
