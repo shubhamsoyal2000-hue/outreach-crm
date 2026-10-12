@@ -107,7 +107,10 @@ function observed(y: number, m: number, d: number): string {
 
 const holidayCache = new Map<number, Set<string>>();
 
-/** US federal holidays plus the quiet days around Thanksgiving and Christmas. */
+/**
+ * US federal holidays plus the quiet days around Thanksgiving and Christmas.
+ * Columbus Day and Veterans Day are left out: most importers and forwarders work them.
+ */
 export function usHolidays(y: number): Set<string> {
   let set = holidayCache.get(y);
   if (set) return set;
@@ -119,8 +122,6 @@ export function usHolidays(y: number): Set<string> {
     observed(y, 6, 19),
     observed(y, 7, 4),
     ymdToString({ y, m: 9, d: nthWeekday(y, 9, 1, 1) }), // Labor Day
-    ymdToString({ y, m: 10, d: nthWeekday(y, 10, 1, 2) }), // Columbus Day
-    observed(y, 11, 11),
     ymdToString({ y, m: 11, d: nthWeekday(y, 11, 4, 4) }), // Thanksgiving
     ymdToString({ y, m: 11, d: nthWeekday(y, 11, 4, 4) + 1 }), // Day after Thanksgiving
     observed(y, 12, 24),

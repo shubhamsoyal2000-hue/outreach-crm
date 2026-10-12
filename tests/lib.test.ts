@@ -22,11 +22,13 @@ describe("time", () => {
     for (const d of ["2026-01-01", "2026-05-25", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25"]) expect(h.has(d)).toBe(true);
     expect(isBusinessDay(parseYmd("2026-10-17"))).toBe(false); // Saturday
     expect(isBusinessDay(parseYmd("2026-10-13"))).toBe(true);
+    expect(isBusinessDay(parseYmd("2026-10-12"))).toBe(true); // Columbus Day: businesses work it
+    expect(isBusinessDay(parseYmd("2026-11-11"))).toBe(true); // Veterans Day
   });
 
   it("adds business days skipping weekends and holidays", () => {
-    // Friday 9 Oct + 1 business day skips the weekend and Columbus Day.
-    expect(ymdToString(addBusinessDays(parseYmd("2026-10-09"), 1))).toBe("2026-10-13");
+    // Friday 9 Oct + 1 business day skips the weekend.
+    expect(ymdToString(addBusinessDays(parseYmd("2026-10-09"), 1))).toBe("2026-10-12");
     expect(ymdToString(addBusinessDays(parseYmd("2026-11-24"), 3))).toBe("2026-12-01"); // Thanksgiving Thursday and Friday skipped
   });
 
