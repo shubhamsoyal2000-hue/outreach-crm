@@ -39,6 +39,27 @@ const OVERLAP_MS = 10 * 60_000;
  * suppresses the address, an out-of-office holds the sequence for a few days.
  * Mail that matches none of our contacts (including warm-up traffic) is ignored.
  */
+/**
+ * Gmail refused to send one of our emails as likely spam. The address is fine,
+ * so it is not suppressed: the inbox is paused instead (more blocked mail can get
+ * the account suspended) and a first email that never arrived is queued again.
+ */
+async function handleSenderBlocked(store: Store, inbox: Inbox, enrollment: Enrollment | null, now: Date) {
+  await store.updateInbox(inbox.id, {
+    status: "paused",
+    paused_reason: "Gmail rejected an email from this inbox as possible spam (\"Message rejected\"). Let it rest at least a day before resuming.",
+  });
+  if (enrollment?.status === "active" && enrollment.next_step === 2) {
+    await store.updateEnrollment(enrollment.id, {
+      next_step: 1,
+      gmail_thread_id: null,
+      thread_subject: null,
+      last_rfc_message_id: null,
+      next_send_at: new Date(now.getTime() + 86_400_000).toISOString(),
+    });
+  }
+}
+
 export async function syncInbox(store: Store, deps: EngineDeps, settings: Settings, inbox: Inbox): Promise<SyncOutcome> {
   const out: SyncOutcome = { inbox: inbox.email, replies: 0, notMonitored: 0, referred: 0, newReplies: [], bounces: 0, autoReplies: 0, optOuts: 0 };
   if (inbox.status === "disconnected" || !inbox.refresh_token_enc) return out;
@@ -94,6 +115,10 @@ export async function syncInbox(store: Store, deps: EngineDeps, settings: Settin
 
     switch (cls.kind) {
       case "bounce":
+        if (cls.senderBlocked) {
+          await handleSenderBlocked(store, inbox, enrollment, now);
+          break;
+        }
         if (!cls.hardBounce || !contact) break;
         out.bounces++;
         await store.addSuppression({ email: contact.email, reason: "bounce", note: msg.snippet.slice(0, 200) });

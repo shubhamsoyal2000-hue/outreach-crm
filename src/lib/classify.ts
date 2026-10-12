@@ -14,6 +14,8 @@ export interface Classification {
   failedRecipient?: string;
   /** For bounces: true when the failure is permanent (5.x.x, address not found). */
   hardBounce?: boolean;
+  /** For bounces: Gmail itself refused to send ("Message rejected"), so the inbox is the problem, not the address. */
+  senderBlocked?: boolean;
   /** For auto-replies: the mailbox is no longer read (closed, person left), or it sends us to another address. */
   notMonitored?: boolean;
 }
@@ -25,6 +27,9 @@ export function parseAddress(from: string): string {
 
 const BOUNCE_SENDERS = /^(mailer-daemon|postmaster|mail-daemon|mailerdaemon)@/;
 const BOUNCE_SUBJECT = /(delivery status notification|undeliverable|undelivered mail|delivery failure|returned mail|mail delivery (failed|subsystem)|failure notice|could not be delivered)/i;
+// Gmail's own refusal to send ("Message blocked ... The response was: Message rejected"),
+// usually because it reads the email as bulk or spam. The recipient never saw it.
+const SENDER_BLOCKED = /(the response was: message rejected|support\.google\.com\/mail\/(answer\/69585|\?p=UnsolicitedMessageError))/i;
 const SOFT_BOUNCE = /(\(delay\)|delayed|temporar|try again later|will retry|mailbox (is )?full|over quota|4\.\d\.\d)/i;
 const HARD_BOUNCE = /(address not found|does not exist|no such user|user unknown|recipient (address )?rejected|invalid (recipient|address|mailbox)|mailbox unavailable|5\.[0-7]\.\d+|couldn'?t be found|not found)/i;
 
@@ -61,6 +66,7 @@ export function classifyInbound(msg: InboundMessage): Classification {
   if (isBounce) {
     const failed = h["x-failed-recipients"]?.split(",")[0]?.trim().toLowerCase();
     const hard = !SOFT_BOUNCE.test(text) || HARD_BOUNCE.test(text);
+    if (SENDER_BLOCKED.test(text)) return { kind: "bounce", failedRecipient: failed || undefined, hardBounce: false, senderBlocked: true };
     return { kind: "bounce", failedRecipient: failed || undefined, hardBounce: hard && !/\(delay\)/i.test(msg.subject) };
   }
 

@@ -263,6 +263,23 @@ describe("sync pass", () => {
     expect(await store.isSuppressed(jane.email)).toBe(true);
   });
 
+  it("Gmail refusing to send pauses the inbox and keeps the address", async () => {
+    const { store, deps, mailer, jane, eJane } = await sentOnce();
+    mailer.inbound["sender0@getabccargo.com"] = [
+      inbound({
+        from: "Mail Delivery Subsystem <mailer-daemon@googlemail.com>",
+        subject: "Delivery Status Notification (Failure)",
+        snippet: "Message blocked Your message to jane@acme.com has been blocked. See technical details below for more information. LEARN MORE The response was: Message rejected. For more information, go to",
+        headers: { "x-failed-recipients": "jane@acme.com" },
+      }),
+    ];
+    const [out] = await runSyncPass(store, deps);
+    expect(out.bounces).toBe(0);
+    expect(await store.isSuppressed(jane.email)).toBe(false);
+    expect(store.inboxes[0].status).toBe("paused");
+    expect(eJane).toMatchObject({ status: "active", next_step: 1, gmail_thread_id: null });
+  });
+
   it("an out-of-office reply holds the sequence instead of stopping it", async () => {
     const { store, deps, mailer, eJane } = await sentOnce();
     const before = eJane.next_send_at;
