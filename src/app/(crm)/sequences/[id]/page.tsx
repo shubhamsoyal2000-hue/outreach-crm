@@ -112,7 +112,7 @@ export default async function SequencePage({ params, searchParams }: { params: P
                 <div><label>Subject B (optional A/B test)</label><input type="text" name="subject_b" defaultValue={step.subject_b ?? ""} /></div>
                 {step.step_number > 1 && <div style={{ flex: "0 0 140px" }}><label>Wait (business days)</label><input type="number" name="delay_business_days" min={1} defaultValue={step.delay_business_days} /></div>}
               </div>
-              <label>Body (plain text; {"{{first_name}}"}, {"{{company}}"} and any lead column work)</label>
+              <label>Body (plain text; {"{{first_name}}"}, {"{{company}}"} and any lead column work; {"[[Hi|Hello]]"} picks one wording per email, and no two emails go out word for word the same)</label>
               <textarea name="body" defaultValue={step.body} />
               <div className="actions"><button type="submit" className="secondary">Save email {step.step_number}</button></div>
             </form>
