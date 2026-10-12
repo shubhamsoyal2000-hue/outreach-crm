@@ -30,6 +30,21 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
       </div>
 
       <div className="panel">
+        <h2>Download checked emails</h2>
+        <p className="muted small">
+          Every address the app has checked, with its result: <strong>Good</strong> (safe to email), <strong>Risky</strong> (catch-all or
+          unclear, may not reach a person) or <strong>Bad</strong> (will bounce). The checked_by column says whether MillionVerifier, a bounce
+          or your Gmail history decided it.
+        </p>
+        <div className="actions">
+          <a className="button secondary" href="/contacts/export">All</a>
+          <a className="button secondary" href="/contacts/export?group=good">Good only</a>
+          <a className="button secondary" href="/contacts/export?group=risky">Risky only</a>
+          <a className="button secondary" href="/contacts/export?group=bad">Bad only</a>
+        </div>
+      </div>
+
+      <div className="panel">
         <h2>Import a CSV</h2>
         <p className="muted small">
           One row per person. An <strong>email</strong> column is required. Name, title, company, website and state are recognised under common

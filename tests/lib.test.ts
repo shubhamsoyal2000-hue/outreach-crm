@@ -188,3 +188,21 @@ describe("company type from the domain", () => {
     expect(guessCompanyKind("cbp.dhs.gov")).toBe("other");
   });
 });
+
+describe("verification groups", () => {
+  it("sorts statuses into good, risky and bad and names who checked", async () => {
+    const { groupOf, checkedBy } = await import("@/lib/verify/groups");
+    expect(groupOf("valid")).toBe("good");
+    expect(groupOf("catch_all")).toBe("risky");
+    expect(groupOf("unknown")).toBe("risky");
+    expect(groupOf("invalid")).toBe("bad");
+    expect(groupOf("unverified")).toBeNull();
+    expect(checkedBy("ok / ")).toBe("MillionVerifier");
+    expect(checkedBy("catch_all / ")).toBe("MillionVerifier");
+    expect(checkedBy("invalid / mailbox_not_found")).toBe("MillionVerifier");
+    expect(checkedBy("delivered without a bounce on 2026-10-06 (Gmail history)")).toBe("Gmail history");
+    expect(checkedBy("hard bounce")).toBe("Bounced");
+    expect(checkedBy("domain has no mail server")).toBe("App check");
+    expect(checkedBy(null)).toBe("");
+  });
+});
