@@ -78,7 +78,7 @@ export default async function FinderPage({ searchParams }: { searchParams: Promi
 
       <div className="panel">
         <h2>Directories</h2>
-        <p className="small muted">Business directories that link to company websites. One page is read whenever fewer than 40 websites are waiting.</p>
+        <p className="small muted">Business directories that link to company websites. One page is read whenever fewer than 40 new websites are waiting.</p>
         <div className="table-wrap">
           <table>
             <thead><tr><th>Directory</th><th>Type</th><th className="num">Next page</th><th className="num">Websites found</th><th>Status</th><th /></tr></thead>
