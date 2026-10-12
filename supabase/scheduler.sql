@@ -44,3 +44,19 @@ select cron.schedule(
   where s.name = 'cron_secret';
   $job$
 );
+
+-- Email finder page: every minute, reads a batch of company websites (returns at once when off or at the daily limit).
+select cron.schedule(
+  'outreach-crm-finder',
+  '* * * * *',
+  $job$
+  select net.http_post(
+    url := 'https://YOUR-APP.vercel.app/api/cron/finder',
+    headers := jsonb_build_object('Authorization', 'Bearer ' || s.decrypted_secret, 'Content-Type', 'application/json'),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 55000
+  )
+  from vault.decrypted_secrets s
+  where s.name = 'cron_secret';
+  $job$
+);
