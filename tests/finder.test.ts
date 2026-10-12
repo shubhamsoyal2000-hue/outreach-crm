@@ -70,3 +70,29 @@ describe("website email finder", () => {
     expect(robotsAllows(robotsDisallows("User-agent: *\nDisallow:"), "/")).toBe(true);
   });
 });
+
+describe("directory profile pages", () => {
+  it("reads page URLs and child sitemaps from a sitemap", async () => {
+    const { sitemapLocs } = await import("../src/lib/finder/extract");
+    expect(sitemapLocs(`<urlset><url><loc>https://x.com/exhibitors/a/</loc><lastmod>2026</lastmod></url><url><loc> https://x.com/exhibitors/b/ </loc></url></urlset>`))
+      .toEqual({ pages: ["https://x.com/exhibitors/a/", "https://x.com/exhibitors/b/"], sitemaps: [] });
+    expect(sitemapLocs(`<sitemapindex><sitemap><loc>https://x.com/exhibitor-sitemap.xml</loc></sitemap></sitemapindex>`).sitemaps)
+      .toEqual(["https://x.com/exhibitor-sitemap.xml"]);
+  });
+
+  it("finds profile links on a listing page", async () => {
+    const { detailLinks } = await import("../src/lib/finder/extract");
+    const html = `<a href="/exhibitors/">All</a><a href="/exhibitors/merci/">& Merci</a><a href="https://www.x.com/exhibitors/merci/#top">More</a><a href="/about">About</a><a href="https://y.com/exhibitors/z">Other</a>`;
+    expect(detailLinks(html, "https://s1.x.com/search/", "/exhibitors/")).toEqual(["https://s1.x.com/exhibitors/merci/"]);
+  });
+
+  it("takes the website shown as an address on a profile page and ignores partner and social links", async () => {
+    const { profileWebsite } = await import("../src/lib/finder/extract");
+    const html = `<h1>Designers Fountain</h1>
+      <a href="https://www.lasvegasmarket.com">Las Vegas Market</a>
+      <a href="https://facebook.com/dmc">http://facebook.com/dmc</a>
+      <p>Website: <a href="http://www.designersftn.com/">http://www.designersftn.com/</a></p>`;
+    expect(profileWebsite(html, "https://www.dallasmarketcenter.com/exhibitors/designers-fountain/")).toEqual({ domain: "designersftn.com", name: "Designers Fountain" });
+    expect(profileWebsite(`<a href="https://partner.com">Partner</a>`, "https://www.dallasmarketcenter.com/exhibitors/x/")).toBeNull();
+  });
+});
