@@ -56,14 +56,18 @@ describe("send pass", () => {
     expect(e.thread_subject).toBe("furniture into Savannah");
   });
 
-  it("replies to its own thread for follow-ups", async () => {
-    const { store, seqId, mailer, deps, clock } = setup();
+  it("replies to its own thread for follow-ups, checking the address again first", async () => {
+    const { store, seqId, mailer, clock } = setup();
+    const checked: string[] = [];
+    const deps = makeDeps(mailer, clock, { verify: async (email) => (checked.push(email), { status: "valid", detail: "ok / ok" }) });
     const e = await enroll(store, seqId, addContact(store, addCompany(store)));
     await runSendPass(store, deps);
+    expect(checked).toHaveLength(0); // checked by the service an hour ago
     clock.now = new Date(new Date(e.next_send_at).getTime() + 60_000);
     store.inboxes[0].next_send_after = null;
     const [out] = await runSendPass(store, deps);
     expect(out.result).toBe("sent");
+    expect(checked).toHaveLength(1);
     const raw = mailer.sent[1].raw;
     expect(mailer.sent[1].threadId).toBe("thread-1");
     expect(header(raw, "Subject")).toBe("Re: furniture into Savannah");
@@ -142,6 +146,30 @@ describe("send pass", () => {
     expect(eBad).toMatchObject({ status: "stopped", stop_reason: "verification_failed" });
     expect(mailer.sent).toHaveLength(1);
     expect(header(mailer.sent[0].raw, "To")).toBe("good@acme.com");
+  });
+
+  it("checks addresses marked good by Gmail history, not only unchecked ones", async () => {
+    const { store, seqId, mailer, clock } = setup();
+    const checked: string[] = [];
+    const deps = makeDeps(mailer, clock, { verify: async (email) => (checked.push(email), { status: "valid", detail: "ok / ok" }) });
+    const contact = addContact(store, addCompany(store), {
+      verified_at: "2026-10-13T13:30:00Z",
+      verification_detail: "delivered without a bounce on 2026-10-05 (Gmail history)",
+    });
+    await enroll(store, seqId, contact);
+    await runSendPass(store, deps);
+    expect(checked).toEqual([contact.email]);
+    expect(mailer.sent).toHaveLength(1);
+  });
+
+  it("never re-checks an address already found bad", async () => {
+    const { store, seqId, mailer, clock } = setup();
+    const checked: string[] = [];
+    const deps = makeDeps(mailer, clock, { verify: async (email) => (checked.push(email), { status: "valid", detail: "ok / ok" }) });
+    const e = await enroll(store, seqId, addContact(store, addCompany(store), { verification_status: "invalid", verified_at: "2026-01-01T00:00:00Z", verification_detail: "hard bounce" }));
+    await runSendPass(store, deps);
+    expect(checked).toHaveLength(0);
+    expect(e).toMatchObject({ status: "stopped", stop_reason: "verification_failed" });
   });
 
   it("verifies unchecked addresses before a follow-up too", async () => {

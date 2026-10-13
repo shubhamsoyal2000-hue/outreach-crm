@@ -14,7 +14,8 @@ import {
   ymdToString,
   type Window,
 } from "../time";
-import type { DueItem, Inbox, Settings } from "../types";
+import type { DueItem, Inbox, Settings, VerificationStatus } from "../types";
+import { checkedBy } from "../verify/groups";
 import { dailyCap, nextGapMinutes } from "../warmup";
 import { MailerError, type EngineDeps } from "./ports";
 
@@ -27,6 +28,8 @@ export type SendOutcome =
 const LOCK_MS = 2 * 60 * 1000;
 const DUE_BATCH = 25;
 const MAX_WORDING_TRIES = 20;
+const RECHECK_MS = 86_400_000;
+const SENDABLE_OR_UNCHECKED: VerificationStatus[] = ["unverified", "valid", "catch_all"];
 
 export function recipientTimezone(item: Pick<DueItem, "contact" | "company">, settings: Settings): string {
   return item.contact.timezone || timezoneForState(item.company?.state) || settings.default_timezone;
@@ -145,10 +148,19 @@ async function tryItem(
     }
   }
 
-  // Verification gate: every email, follow-ups included, only goes to an address checked recently.
+  // Verification gate: every email, follow-ups included, goes through the
+  // verification service first. Only a check by that service in the last day
+  // counts; Gmail history or other sources never skip it.
   let status = contact.verification_status;
-  const maxAgeMs = settings.verification_max_age_days * 86_400_000;
-  const fresh = contact.verified_at && now.getTime() - new Date(contact.verified_at).getTime() <= maxAgeMs;
+  if (!SENDABLE_OR_UNCHECKED.includes(status)) {
+    await stop("verification_failed");
+    return null;
+  }
+  const maxAgeMs = Math.min(settings.verification_max_age_days * 86_400_000, RECHECK_MS);
+  const fresh =
+    checkedBy(contact.verification_detail ?? null) === "MillionVerifier" &&
+    contact.verified_at &&
+    now.getTime() - new Date(contact.verified_at).getTime() <= maxAgeMs;
   if (status === "unverified" || !fresh) {
     if (!deps.verifier) return null; // waits until a verification API key is configured
     const result = await deps.verifier.verify(contact.email, { allowShared: settings.allow_shared_inboxes });

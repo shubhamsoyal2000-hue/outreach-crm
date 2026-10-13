@@ -90,6 +90,7 @@ export interface Contact {
   fields: Record<string, string>;
   verification_status: VerificationStatus;
   verified_at: string | null;
+  verification_detail?: string | null;
 }
 
 export interface SequenceStep {

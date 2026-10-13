@@ -101,8 +101,7 @@ export class MemoryStore implements Store {
   async updateEnrollment(id: string, patch: Partial<Enrollment>) { Object.assign(this.enrollments.find((e) => e.id === id)!, patch); }
 
   async updateContactVerification(id: string, status: VerificationStatus, detail: string | null, at: Date) {
-    void detail;
-    Object.assign(this.contacts.find((c) => c.id === id)!, { verification_status: status, verified_at: at.toISOString() });
+    Object.assign(this.contacts.find((c) => c.id === id)!, { verification_status: status, verified_at: at.toISOString(), verification_detail: detail });
   }
 
   async recordMessage(m: NewMessage) {

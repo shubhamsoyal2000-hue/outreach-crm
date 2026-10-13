@@ -88,7 +88,8 @@ export function addContact(store: MemoryStore, company: Company | null, over: Pa
     timezone: null,
     fields: { commodity: "furniture", port: "Savannah" },
     verification_status: "valid",
-    verified_at: "2026-10-10T00:00:00Z",
+    verified_at: "2026-10-13T13:00:00Z",
+    verification_detail: "ok / ok",
     ...over,
   };
   store.contacts.push(c);
