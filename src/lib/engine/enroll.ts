@@ -47,6 +47,7 @@ export async function enrollContacts(
   const inboxes = (await store.listInboxes()).filter((i: Inbox) => i.status !== "disconnected" && i.refresh_token_enc);
   if (!inboxes.length) return { enrolled: 0, skipped: { "no connected inbox": candidates.length } };
   const load = await store.activeEnrollmentCounts();
+  const suppressed = await store.suppressionMatcher();
 
   const rows: NewEnrollment[] = [];
   const companyInbox = new Map<string, Inbox>();
@@ -56,7 +57,7 @@ export async function enrollContacts(
     if (alreadyEnrolled) { bump("already in this sequence"); continue; }
     if (BLOCKED_VERIFICATION.has(contact.verification_status)) { bump("failed verification"); continue; }
     if (company && company.status !== "active") { bump("company replied or do-not-contact"); continue; }
-    if (await store.isSuppressed(contact.email)) { bump("on suppression list"); continue; }
+    if (suppressed(contact.email)) { bump("on suppression list"); continue; }
 
     const inbox =
       (contact.company_id && companyInbox.get(contact.company_id)) ||

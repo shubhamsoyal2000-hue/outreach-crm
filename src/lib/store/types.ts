@@ -61,6 +61,8 @@ export interface Store {
   /** Due enrollments, oldest first; `kind` limits them to first emails or to follow-ups. */
   dueItems(inboxId: string, now: Date, limit: number, kind?: DueKind): Promise<DueItem[]>;
   isSuppressed(email: string): Promise<boolean>;
+  /** Loads the suppression list once, for checking many addresses quickly. */
+  suppressionMatcher(): Promise<(email: string) => boolean>;
   /** True if any contact at this company got a first email on this day, from any inbox. */
   companyFirstTouchOnDay(companyId: string, sendDay: string): Promise<boolean>;
 

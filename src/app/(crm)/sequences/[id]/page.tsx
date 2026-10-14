@@ -6,6 +6,8 @@ import type { Company, Contact, SequenceStep } from "@/lib/types";
 import { addStep, deleteLastStep, enrollBatch, saveStep, setAutoEnroll, setSequenceStatus } from "../../../actions";
 
 export const dynamic = "force-dynamic";
+// Enrolling up to 1,000 people at once reads every contact and enrollment.
+export const maxDuration = 300;
 
 const SAMPLE_CONTACT: Contact = {
   id: "sample", company_id: null, email: "jane@example.com", first_name: "Jane", last_name: "Doe", title: "Logistics Manager",

@@ -106,6 +106,20 @@ export class SupabaseStore implements Store {
     return !!byDomain?.length;
   }
 
+  async suppressionMatcher() {
+    const emails = new Set<string>();
+    const domains = new Set<string>();
+    for (let from = 0; ; from += 1000) {
+      const rows = check(await db().from("suppressions").select("email, domain").order("id").range(from, from + 999), "suppressions") as { email: string | null; domain: string | null }[];
+      for (const r of rows) {
+        if (r.email) emails.add(r.email);
+        if (r.domain) domains.add(r.domain);
+      }
+      if (rows.length < 1000) break;
+    }
+    return (email: string) => emails.has(email) || domainAndParents(emailDomain(email)).some((d) => domains.has(d));
+  }
+
   async companyFirstTouchOnDay(companyId: string, sendDay: string) {
     const ids = await companyContactIds(companyId);
     if (!ids.length) return false;

@@ -94,6 +94,14 @@ export class MemoryStore implements Store {
     return this.suppressions.some((s) => s.email === email || (!!s.domain && domains.includes(s.domain)));
   }
 
+  async suppressionMatcher() {
+    const list = [...this.suppressions];
+    return (email: string) => {
+      const domains = domainAndParents(emailDomain(email));
+      return list.some((s) => s.email === email || (!!s.domain && domains.includes(s.domain)));
+    };
+  }
+
   async companyFirstTouchOnDay(companyId: string, sendDay: string) {
     const ids = new Set(this.contacts.filter((c) => c.company_id === companyId).map((c) => c.id));
     return this.messages.some((m) => m.kind === "sent" && m.step_number === 1 && m.send_day === sendDay && ids.has(m.contact_id!));
