@@ -28,7 +28,6 @@ export type SendOutcome =
 const LOCK_MS = 2 * 60 * 1000;
 const DUE_BATCH = 25;
 const MAX_WORDING_TRIES = 20;
-const RECHECK_MS = 60 * 60 * 1000; // a check from the last hour counts as "right before sending"
 const SENDABLE_OR_UNCHECKED: VerificationStatus[] = ["unverified", "valid", "catch_all"];
 
 export function recipientTimezone(item: Pick<DueItem, "contact" | "company">, settings: Settings): string {
@@ -148,15 +147,16 @@ async function tryItem(
     }
   }
 
-  // Verification gate: every email, follow-ups included, goes through the
-  // verification service first. Only a check by that service in the last hour
-  // counts; Gmail history or other sources never skip it.
+  // Verification gate: every address is checked by the verification service
+  // once before its first email from us. That check is reused (no new credit)
+  // for later emails until it is verification_max_age_days old; Gmail history
+  // or other sources never count as a check.
   let status = contact.verification_status;
   if (!SENDABLE_OR_UNCHECKED.includes(status)) {
     await stop("verification_failed");
     return null;
   }
-  const maxAgeMs = Math.min(settings.verification_max_age_days * 86_400_000, RECHECK_MS);
+  const maxAgeMs = settings.verification_max_age_days * 86_400_000;
   const fresh =
     checkedBy(contact.verification_detail ?? null) === "MillionVerifier" &&
     contact.verified_at &&

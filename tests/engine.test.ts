@@ -56,18 +56,18 @@ describe("send pass", () => {
     expect(e.thread_subject).toBe("furniture into Savannah");
   });
 
-  it("replies to its own thread for follow-ups, checking the address again first", async () => {
+  it("replies to its own thread for follow-ups, reusing the earlier check", async () => {
     const { store, seqId, mailer, clock } = setup();
     const checked: string[] = [];
     const deps = makeDeps(mailer, clock, { verify: async (email) => (checked.push(email), { status: "valid", detail: "ok / ok" }) });
     const e = await enroll(store, seqId, addContact(store, addCompany(store)));
     await runSendPass(store, deps);
-    expect(checked).toHaveLength(0); // checked by the service an hour ago
+    expect(checked).toHaveLength(0); // already checked by the service
     clock.now = new Date(new Date(e.next_send_at).getTime() + 60_000);
     store.inboxes[0].next_send_after = null;
     const [out] = await runSendPass(store, deps);
     expect(out.result).toBe("sent");
-    expect(checked).toHaveLength(1);
+    expect(checked).toHaveLength(0); // already checked by the service, so no credit is spent again
     const raw = mailer.sent[1].raw;
     expect(mailer.sent[1].threadId).toBe("thread-1");
     expect(header(raw, "Subject")).toBe("Re: furniture into Savannah");
