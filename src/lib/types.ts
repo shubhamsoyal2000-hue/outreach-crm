@@ -91,6 +91,7 @@ export interface Contact {
   verification_status: VerificationStatus;
   verified_at: string | null;
   verification_detail?: string | null;
+  source?: string | null;
 }
 
 export interface SequenceStep {

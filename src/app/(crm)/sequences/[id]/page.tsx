@@ -69,6 +69,8 @@ export default async function SequencePage({ params, searchParams }: { params: P
               <option value="importers_with_data">Importers with ImportInfo data (ports, routes)</option>
               <option value="importers">All importers</option>
               <option value="forwarders">Freight forwarders</option>
+              <option value="finder_importers">Importers found by the email finder (sent first)</option>
+              <option value="finder_forwarders">Forwarders found by the email finder (sent first)</option>
               <option value="all">Everyone</option>
             </select>
           </div>

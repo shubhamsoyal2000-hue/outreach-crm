@@ -445,6 +445,30 @@ describe("enrollment", () => {
     const again = await enrollContacts(store, seqId, store.candidates(seqId, ids.slice(0, 1)), TUE_10AM_ET);
     expect(again.skipped).toEqual({ "already in this sequence": 1 });
   });
+
+  it("keeps a company on one inbox and can put a batch ahead of the queue", async () => {
+    const { store, seqId } = setup({ inboxes: 2 });
+    const co = addCompany(store, { domain: "same.com" });
+    const ids = [addContact(store, co).id, addContact(store, co).id, addContact(store, co).id];
+    await enrollContacts(store, seqId, store.candidates(seqId, ids), TUE_10AM_ET, { prioritize: true });
+    expect(new Set(store.enrollments.map((e) => e.inbox_id)).size).toBe(1);
+    for (const e of store.enrollments) expect(new Date(e.next_send_at).getTime()).toBeLessThan(TUE_10AM_ET.getTime() - 6 * 86_400_000);
+  });
+});
+
+describe("email finder leads", () => {
+  it("keeps real buyer inboxes at the company's own US-looking domain", async () => {
+    const { isFinderLead, finderRank } = await import("@/lib/finder-leads");
+    const lead = (email: string, source = "website_finder") => ({ email, source });
+    expect(isFinderLead(lead("sales@acme.com"), "acme.com")).toBe(true);
+    expect(isFinderLead(lead("jane@acme.com", "research"), "acme.com")).toBe(true);
+    expect(isFinderLead(lead("sales@acme.com", "gmail_history"), "acme.com")).toBe(false);
+    expect(isFinderLead(lead("press@acme.com"), "acme.com")).toBe(false);
+    expect(isFinderLead(lead("careers@acme.com"), "acme.com")).toBe(false);
+    expect(isFinderLead(lead("info@other.com"), "acme.com")).toBe(false);
+    expect(isFinderLead(lead("info@acme.nl"), "acme.nl")).toBe(false);
+    expect(finderRank("logistics@acme.com")).toBeLessThan(finderRank("jane@acme.com"));
+  });
 });
 
 describe("enrolling people we emailed by hand", () => {

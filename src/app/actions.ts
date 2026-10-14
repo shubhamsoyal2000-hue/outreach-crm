@@ -8,6 +8,7 @@ import { parseLeadsCsv } from "@/lib/csv-import";
 import { domainFromWebsite, normalizeEmail, isValidSyntax } from "@/lib/email-rules";
 import { productionDeps } from "@/lib/engine";
 import { enrollContacts } from "@/lib/engine/enroll";
+import { FINDER_MAX_ADDRESSES, FINDER_MAX_PER_COMPANY, finderRank, isFinderLead } from "@/lib/finder-leads";
 import { runTick } from "@/lib/engine/tick";
 import { saveLeads } from "@/lib/import-leads";
 import { newSessionToken, SESSION_COOKIE, sessionMaxAge } from "@/lib/session";
@@ -295,13 +296,14 @@ export async function setAutoEnroll(fd: FormData) {
   done(`/sequences/${sequenceId}`, on ? "Auto-enroll is on. Researched importers join this sequence every hour." : "Auto-enroll is off.");
 }
 
-const ENROLL_WHO = ["importers_researched", "importers_with_data", "importers", "forwarders", "all"] as const;
+const ENROLL_WHO = ["importers_researched", "importers_with_data", "importers", "forwarders", "finder_importers", "finder_forwarders", "all"] as const;
 type EnrollWho = (typeof ENROLL_WHO)[number];
 
 function matchesWho(company: Company | null, who: EnrollWho): boolean {
   if (who === "all") return true;
   const kind = company?.kind ?? "importer";
-  if (who === "forwarders") return kind === "forwarder";
+  if (who === "forwarders" || who === "finder_forwarders") return kind === "forwarder";
+  if (who === "finder_importers") return kind === "importer";
   if (kind !== "importer") return false;
   if (who === "importers_researched") return !!company?.facts?.custom_line;
   return who === "importers" || !!company?.facts?.top_us_port || !!company?.facts?.top_route_from;
@@ -314,15 +316,23 @@ export async function enrollBatch(fd: FormData) {
   const who = (ENROLL_WHO as readonly string[]).includes(str(fd, "who")) ? (str(fd, "who") as EnrollWho) : "all";
   const store = new SupabaseStore();
 
+  const finder = who === "finder_importers" || who === "finder_forwarders";
+
   // Anyone already in any sequence (this one or another) is left alone, so nobody gets two cold threads.
+  // Email-finder leads also skip any company someone is already being emailed at.
   const already = new Set<string>();
   const elsewhere = new Set<string>();
+  const busyCompanies = new Set<string>();
   for (let from = 0; ; from += 1000) {
-    const page = await must(db().from("enrollments").select("contact_id, sequence_id").order("id").range(from, from + 999));
-    const rows = (page.data ?? []) as { contact_id: string; sequence_id: string }[];
-    for (const r of rows) (r.sequence_id === sequenceId ? already : elsewhere).add(r.contact_id);
+    const page = await must(db().from("enrollments").select("contact_id, sequence_id, contact:contacts(company_id)").order("id").range(from, from + 999));
+    const rows = (page.data ?? []) as unknown as { contact_id: string; sequence_id: string; contact: { company_id: string | null } | null }[];
+    for (const r of rows) {
+      (r.sequence_id === sequenceId ? already : elsewhere).add(r.contact_id);
+      if (r.contact?.company_id) busyCompanies.add(r.contact.company_id);
+    }
     if (rows.length < 1000) break;
   }
+  const finderPool: (Contact & { company: Company | null })[] = [];
   let inOther = 0;
   const candidates: { contact: Contact; company: Company | null; alreadyEnrolled: boolean }[] = [];
   for (let from = 0; candidates.length < count; from += 1000) {
@@ -335,16 +345,34 @@ export async function enrollBatch(fd: FormData) {
         .range(from, from + 999),
     );
     const rows = (page.data ?? []) as (Contact & { company: Company | null })[];
-    for (const { company, ...contact } of rows) {
+    for (const row of rows) {
+      const { company, ...contact } = row;
       if (candidates.length >= count) break;
       if (already.has(contact.id) || !matchesWho(company, who)) continue;
       if (elsewhere.has(contact.id)) { inOther++; continue; }
+      if (finder) {
+        if (isFinderLead(contact, company?.domain) && company && !busyCompanies.has(company.id)) finderPool.push(row);
+        continue;
+      }
       candidates.push({ contact: contact as Contact, company, alreadyEnrolled: false });
     }
     if (rows.length < 1000) break;
   }
+  if (finder) {
+    // Up to 3 people per company, likely freight buyers first; skip whole staff directories.
+    const byCompany = new Map<string, (Contact & { company: Company | null })[]>();
+    for (const r of finderPool) byCompany.set(r.company!.id, [...(byCompany.get(r.company!.id) ?? []), r]);
+    for (const group of byCompany.values()) {
+      if (group.length > FINDER_MAX_ADDRESSES) continue;
+      group.sort((a, b) => finderRank(a.email) - finderRank(b.email));
+      for (const { company, ...contact } of group.slice(0, FINDER_MAX_PER_COMPANY)) {
+        if (candidates.length < count) candidates.push({ contact: contact as Contact, company, alreadyEnrolled: false });
+      }
+    }
+  }
 
-  const summary = await enrollContacts(store, sequenceId, candidates, new Date());
+  // Email-finder leads go ahead of the existing backlog of first emails (Shubham, 2026-10-14).
+  const summary = await enrollContacts(store, sequenceId, candidates, new Date(), { prioritize: finder });
   const skipped = Object.entries({ ...summary.skipped, ...(inOther ? { "already in another sequence": inOther } : {}) }).map(([k, n]) => `${n} ${k}`);
   done(
     `/sequences/${sequenceId}`,
