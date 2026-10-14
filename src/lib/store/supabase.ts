@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env } from "../config";
 import { domainAndParents, emailDomain } from "../email-rules";
 import type { Company, Contact, DueItem, Enrollment, Inbox, SequenceStep, Settings, VerificationStatus } from "../types";
-import type { EnrollCandidate, NewEnrollment, NewMessage, ReplyForQuote, Store } from "./types";
+import type { DueKind, EnrollCandidate, NewEnrollment, NewMessage, ReplyForQuote, Store } from "./types";
 
 let client: SupabaseClient | null = null;
 
@@ -73,16 +73,17 @@ export class SupabaseStore implements Store {
     return { sent: sent.length, bounced: bounced.count ?? 0 };
   }
 
-  async dueItems(inboxId: string, now: Date, limit: number): Promise<DueItem[]> {
+  async dueItems(inboxId: string, now: Date, limit: number, kind?: DueKind): Promise<DueItem[]> {
+    let query = db()
+      .from("enrollments")
+      .select("*, contact:contacts(*, company:companies(*)), sequence:sequences(status, steps:sequence_steps(step_number, delay_business_days, subject_a, subject_b, body))")
+      .eq("inbox_id", inboxId)
+      .eq("status", "active")
+      .lte("next_send_at", now.toISOString());
+    if (kind === "first") query = query.eq("next_step", 1);
+    if (kind === "followup") query = query.gt("next_step", 1);
     const rows = check(
-      await db()
-        .from("enrollments")
-        .select("*, contact:contacts(*, company:companies(*)), sequence:sequences(status, steps:sequence_steps(step_number, delay_business_days, subject_a, subject_b, body))")
-        .eq("inbox_id", inboxId)
-        .eq("status", "active")
-        .lte("next_send_at", now.toISOString())
-        .order("next_send_at")
-        .limit(limit),
+      await query.order("next_send_at").limit(limit),
       "due enrollments",
     ) ?? [];
     return rows.map((r: Enrollment & { contact: Contact & { company: Company | null }; sequence: { status: DueItem["sequenceStatus"]; steps: SequenceStep[] } }) => {

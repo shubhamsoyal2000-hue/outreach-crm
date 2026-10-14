@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { domainAndParents, emailDomain } from "../email-rules";
 import type { Company, Contact, DueItem, Enrollment, Inbox, Quote, SequenceStep, Settings, VerificationStatus } from "../types";
-import type { EnrollCandidate, NewEnrollment, NewMessage, ReplyForQuote, Store } from "./types";
+import type { DueKind, EnrollCandidate, NewEnrollment, NewMessage, ReplyForQuote, Store } from "./types";
 
 export const DEFAULT_SETTINGS: Settings = {
   sending_enabled: false,
@@ -70,9 +70,10 @@ export class MemoryStore implements Store {
     return { sent: sent.length, bounced };
   }
 
-  async dueItems(inboxId: string, now: Date, limit: number): Promise<DueItem[]> {
+  async dueItems(inboxId: string, now: Date, limit: number, kind?: DueKind): Promise<DueItem[]> {
     return this.enrollments
       .filter((e) => e.inbox_id === inboxId && e.status === "active" && new Date(e.next_send_at) <= now)
+      .filter((e) => !kind || (kind === "first" ? e.next_step === 1 : e.next_step > 1))
       .sort((a, b) => a.next_send_at.localeCompare(b.next_send_at))
       .slice(0, limit)
       .map((e) => {

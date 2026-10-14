@@ -58,7 +58,8 @@ export interface Store {
   /** Of this inbox's last `n` sends, how many have bounced. */
   /** Bounces among the last n sends, counting only sends after `since` when given. */
   recentBounceStats(inboxId: string, n: number, since?: string | null): Promise<{ sent: number; bounced: number }>;
-  dueItems(inboxId: string, now: Date, limit: number): Promise<DueItem[]>;
+  /** Due enrollments, oldest first; `kind` limits them to first emails or to follow-ups. */
+  dueItems(inboxId: string, now: Date, limit: number, kind?: DueKind): Promise<DueItem[]>;
   isSuppressed(email: string): Promise<boolean>;
   /** True if any contact at this company got a first email on this day, from any inbox. */
   companyFirstTouchOnDay(companyId: string, sendDay: string): Promise<boolean>;
@@ -95,3 +96,5 @@ export interface Store {
   /** Contacts at active importers with an approved opening line who are in no sequence yet. */
   researchedCandidates(): Promise<EnrollCandidate[]>;
 }
+
+export type DueKind = "first" | "followup";

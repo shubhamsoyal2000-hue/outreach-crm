@@ -83,7 +83,13 @@ export async function runInboxSend(store: Store, deps: EngineDeps, settings: Set
 
   if (!(await store.claimInbox(inbox.id, now, LOCK_MS))) return skip("another run holds this inbox");
   try {
-    const items = await store.dueItems(inbox.id, now, DUE_BATCH);
+    // Alternate follow-ups and first emails so a long queue of one never starves the other.
+    const followUpsFirst = counts.total % 2 === 0;
+    const [firsts, followUps] = await Promise.all([
+      store.dueItems(inbox.id, now, DUE_BATCH, "first"),
+      store.dueItems(inbox.id, now, DUE_BATCH, "followup"),
+    ]);
+    const items = followUpsFirst ? [...followUps, ...firsts] : [...firsts, ...followUps];
     const w = windowOf(settings);
     for (const item of items) {
       const outcome = await tryItem(store, deps, settings, inbox, item, { now, w, sendDay, cap, counts });

@@ -98,6 +98,25 @@ describe("send pass", () => {
     expect(mailer.sent).toHaveLength(50);
   });
 
+  it("alternates follow-ups with first emails when both are waiting", async () => {
+    const { store, seqId, mailer, deps } = setup();
+    for (let i = 0; i < 6; i++) {
+      await enroll(store, seqId, addContact(store, addCompany(store, { domain: `old${i}.com`, name: `Old Co ${i}` })), 0, "2026-10-01T12:00:00Z");
+    }
+    for (let i = 0; i < 3; i++) {
+      const contact = addContact(store, addCompany(store, { domain: `fu${i}.com`, name: `Follow Co ${i}` }), { first_name: ["Ann", "Bo", "Cy"][i] });
+      const e = await enroll(store, seqId, contact, 0, "2026-10-13T13:00:00Z");
+      Object.assign(e, { next_step: 2, gmail_thread_id: `t${i}`, thread_subject: "furniture into Savannah", last_rfc_message_id: `<m${i}@x>` });
+    }
+    for (let i = 0; i < 4; i++) {
+      store.inboxes[0].next_send_after = null;
+      await runSendPass(store, deps);
+    }
+    const replies = mailer.sent.filter((m) => m.threadId !== null).length;
+    expect(mailer.sent).toHaveLength(4);
+    expect(replies).toBe(2);
+  });
+
   it("stops at the warm-up cap for the day", async () => {
     const { store, seqId, mailer, deps } = setup();
     store.inboxes[0].cold_start_date = "2026-10-13"; // first day: cap 10
