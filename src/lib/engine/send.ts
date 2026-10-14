@@ -28,6 +28,11 @@ export type SendOutcome =
 const LOCK_MS = 2 * 60 * 1000;
 const DUE_BATCH = 25;
 const MAX_WORDING_TRIES = 20;
+// The scheduler runs every 5 minutes, so a send can only happen on a tick.
+// Spacing is aimed half a tick early and a tick may run up to a minute early,
+// otherwise every gap rounds up to the next tick and inboxes fall short of their cap.
+const TICK_MINUTES = 5;
+const TICK_SLACK_MS = 60_000;
 const SENDABLE_OR_UNCHECKED: VerificationStatus[] = ["unverified", "valid", "catch_all"];
 
 export function recipientTimezone(item: Pick<DueItem, "contact" | "company">, settings: Settings): string {
@@ -58,7 +63,7 @@ export async function runInboxSend(store: Store, deps: EngineDeps, settings: Set
   const skip = (reason: string): SendOutcome => ({ inbox: inbox.email, result: "skipped", reason });
 
   if (inbox.status !== "active") return skip(`inbox is ${inbox.status}`);
-  if (inbox.next_send_after && new Date(inbox.next_send_after) > now) return skip("spacing between sends");
+  if (inbox.next_send_after && new Date(inbox.next_send_after).getTime() > now.getTime() + TICK_SLACK_MS) return skip("spacing between sends");
 
   const teamTz = settings.default_timezone;
   const today = localDay(now, teamTz);
@@ -253,9 +258,9 @@ async function tryItem(
   }
 
   const p = localParts(now, settings.default_timezone);
-  const minutesLeft = Math.max(60, (settings.send_window_end_hour - p.hour) * 60 - p.minute);
+  const minutesLeft = Math.max(TICK_MINUTES, (settings.send_window_end_hour - p.hour) * 60 - p.minute);
   const gap = nextGapMinutes(minutesLeft, ctx.cap - ctx.counts.total - 1, deps.rng);
-  await store.updateInbox(inbox.id, { last_sent_at: now.toISOString(), next_send_after: addMinutes(now, gap).toISOString() });
+  await store.updateInbox(inbox.id, { last_sent_at: now.toISOString(), next_send_after: addMinutes(now, Math.max(3, gap - TICK_MINUTES / 2)).toISOString() });
 
   return { inbox: inbox.email, result: "sent", enrollmentId: e.id, step: step.step_number };
 }

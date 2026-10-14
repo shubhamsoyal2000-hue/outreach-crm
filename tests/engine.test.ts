@@ -84,6 +84,20 @@ describe("send pass", () => {
     expect(new Date(store.inboxes[0].next_send_after!).getTime() - TUE_10AM_ET.getTime()).toBeGreaterThanOrEqual(3 * 60_000);
   });
 
+  it("reaches the daily cap when the scheduler ticks every 5 minutes", async () => {
+    const { store, seqId, mailer, clock, deps } = setup({ settings: { ramp_start_per_day: 50, ramp_step_per_business_day: 0 } });
+    store.inboxes[0].max_daily = 50;
+    for (let i = 0; i < 60; i++) {
+      await enroll(store, seqId, addContact(store, addCompany(store, { domain: `t${i}.com`, name: `Tick Co ${i}` })), 0, "2026-10-13T12:00:00Z");
+    }
+    // 9:00 to 16:00 New York, one tick every 5 minutes, each a couple of seconds late like the real scheduler.
+    for (let t = 0; t < 84; t++) {
+      clock.now = new Date(Date.parse("2026-10-13T13:00:02Z") + t * 5 * 60_000);
+      await runSendPass(store, deps);
+    }
+    expect(mailer.sent).toHaveLength(50);
+  });
+
   it("stops at the warm-up cap for the day", async () => {
     const { store, seqId, mailer, deps } = setup();
     store.inboxes[0].cold_start_date = "2026-10-13"; // first day: cap 10
