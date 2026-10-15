@@ -1,14 +1,16 @@
 import Link from "next/link";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge, Flash, pct, Stat } from "@/components/ui";
 import { env } from "@/lib/config";
 import { db, SupabaseStore } from "@/lib/store/supabase";
-import { localDay, ymdToString } from "@/lib/time";
+import { localDay, ymdToString, zonedTimeToUtc } from "@/lib/time";
 import { dailyCap } from "@/lib/warmup";
 import { runNow, setSending } from "../actions";
 
 export const dynamic = "force-dynamic";
 
 interface InboxStat { inbox_id: string; email: string; status: string; sent: number; bounced: number; replied: number; auto_replies: number; unsubscribe_replies: number }
+interface TodaySend { inbox_id: string; step_number: number | null; enrollment: { sequence: { name: string } | null } | null }
 interface SeqStat { sequence_id: string; name: string; status: string; enrolled: number; active: number; sent: number; bounced: number; replied: number; unsubscribed: number }
 
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ msg?: string }> }) {
@@ -19,7 +21,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const today = localDay(new Date(), settings.default_timezone);
   const todayStr = ymdToString(today);
 
-  const [inboxStats, seqStats, replies, unverified, newQuotes] = await Promise.all([
+  const dayStart = zonedTimeToUtc(today, 0, 0, settings.default_timezone).toISOString();
+  const [inboxStats, seqStats, replies, unverified, newQuotes, todaySent, todayInbound] = await Promise.all([
     db().from("inbox_stats").select("*"),
     db().from("sequence_stats").select("*"),
     db()
@@ -31,7 +34,22 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       .limit(25),
     db().from("contacts").select("id", { count: "exact", head: true }).eq("verification_status", "unverified"),
     db().from("quotes").select("id", { count: "exact", head: true }).eq("status", "new"),
+    db().from("messages").select("inbox_id, step_number, enrollment:enrollments(sequence:sequences(name))").eq("kind", "sent").eq("send_day", todayStr).limit(2000),
+    db().from("messages").select("kind").eq("direction", "inbound").in("kind", ["reply", "unsubscribe_reply", "bounce", "auto_reply"]).gte("occurred_at", dayStart).limit(2000),
   ]);
+  const sends = (todaySent.data ?? []) as unknown as TodaySend[];
+  const byInbox = (id: string) => {
+    const mine = sends.filter((m) => m.inbox_id === id);
+    const first = mine.filter((m) => (m.step_number ?? 1) === 1).length;
+    return { first, followups: mine.length - first };
+  };
+  const firstByList = new Map<string, number>();
+  for (const m of sends) {
+    if ((m.step_number ?? 1) !== 1) continue;
+    const name = m.enrollment?.sequence?.name ?? "Other";
+    firstByList.set(name, (firstByList.get(name) ?? 0) + 1);
+  }
+  const inboundToday = (kind: string) => (todayInbound.data ?? []).filter((m: { kind: string }) => m.kind === kind).length;
   const statsById = new Map(((inboxStats.data ?? []) as InboxStat[]).map((s) => [s.inbox_id, s]));
   const todayCounts = await Promise.all(inboxes.map((i) => store.countSentOnDay(i.id, todayStr)));
 
@@ -82,8 +100,48 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         </div>
       </div>
 
+      <div className="panel">
+        <div className="row" style={{ alignItems: "baseline" }}>
+          <h2>Today</h2>
+          <div style={{ flex: "0 0 auto" }} className="muted small">
+            Live, updates every minute. Last update {new Date().toLocaleTimeString("en-US", { timeZone: settings.default_timezone, hour: "numeric", minute: "2-digit" })} New York time.
+            <AutoRefresh />
+          </div>
+        </div>
+        <div className="grid">
+          <Stat n={`${sentToday} / ${capToday}`} label="sent today / today's limit" />
+          <Stat n={sends.filter((m) => (m.step_number ?? 1) === 1).length} label="first emails" />
+          <Stat n={sends.filter((m) => (m.step_number ?? 1) > 1).length} label="follow-ups" />
+          <Stat n={inboundToday("reply") + inboundToday("unsubscribe_reply")} label="replies today" />
+          <Stat n={inboundToday("bounce")} label="bounces today" />
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Inbox</th><th>Status</th><th className="num">Sent / limit</th><th className="num">First emails</th><th className="num">Follow-ups</th></tr></thead>
+            <tbody>
+              {inboxes.map((i, idx) => {
+                const t = byInbox(i.id);
+                return (
+                  <tr key={i.id}>
+                    <td>{i.email}</td>
+                    <td><Badge value={i.status} /></td>
+                    <td className="num">{todayCounts[idx].total} / {dailyCap(i, today, settings)}</td>
+                    <td className="num">{t.first}</td>
+                    <td className="num">{t.followups}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {firstByList.size > 0 && (
+          <p className="muted small">
+            First emails by list: {[...firstByList.entries()].sort((a, b) => b[1] - a[1]).map(([name, n]) => `${name} ${n}`).join(", ")}.
+          </p>
+        )}
+      </div>
+
       <div className="grid">
-        <Stat n={`${sentToday} / ${capToday}`} label="sent today / today's safe limit" />
         <Stat n={totals.sent} label="emails sent" />
         <Stat n={pct(totals.bounced, totals.sent)} label="bounce rate (keep under 2%)" />
         <Stat n={pct(totals.replied, totals.sent)} label="reply rate" />
