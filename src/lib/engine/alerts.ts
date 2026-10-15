@@ -37,16 +37,21 @@ export function buildAlert(replies: ReplyEvent[], problems: InboxProblem[], appU
   if (problems.length) {
     parts.push(problems.length === 1 ? "An inbox stopped sending:" : "These inboxes stopped sending:");
     for (const p of problems) {
-      parts.push(`${p.inbox} is ${p.status}. ${p.reason}`);
+      parts.push(
+        p.status === "disconnected"
+          ? `${p.inbox} got logged out of Gmail and stopped sending. Open ${appUrl}/inboxes, click Reconnect next to it and sign in with that Google account. It starts sending again by itself.`
+          : `${p.inbox} is ${p.status}. ${p.reason}`,
+      );
     }
-    parts.push(`Fix it on the Inboxes page: ${appUrl}/inboxes`);
+    parts.push(`Inboxes page: ${appUrl}/inboxes`);
   }
   parts.push(`Dashboard: ${appUrl}`);
 
   const subjectBits: string[] = [];
   if (replies.length === 1) subjectBits.push(`Reply from ${replies[0].from}`);
   else if (replies.length) subjectBits.push(`${replies.length} new replies`);
-  if (problems.length === 1) subjectBits.push(`${problems[0].inbox} is ${problems[0].status}`);
+  if (problems.length === 1)
+    subjectBits.push(problems[0].status === "disconnected" ? `Reconnect ${problems[0].inbox}, it stopped sending` : `${problems[0].inbox} is ${problems[0].status}`);
   else if (problems.length) subjectBits.push(`${problems.length} inboxes stopped`);
   return { subject: `[Outreach CRM] ${subjectBits.join(", ")}`, body: parts.join("\n\n") };
 }

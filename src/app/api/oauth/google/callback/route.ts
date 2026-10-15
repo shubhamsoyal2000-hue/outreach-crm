@@ -20,11 +20,17 @@ export async function GET(request: Request) {
   const { refreshToken, email } = await accessTokenFromCode(code);
   if (!refreshToken) return fail("Google did not return offline access. Remove the app's access in the Google account and connect again.");
 
-  const existing = await db().from("inboxes").select("id").eq("email", email).maybeSingle();
+  const existing = await db().from("inboxes").select("id, status").eq("email", email).maybeSingle();
   const tokenEnc = encrypt(env.encryptionKey, refreshToken);
-  // A newly connected or reconnected inbox starts paused, so a human resumes it on purpose.
+  // A new inbox starts paused, so a human resumes it on purpose. An inbox that only
+  // lost its Gmail login (the weekly logout) goes straight back to sending; one
+  // paused for any other reason (bounces, by hand) stays paused.
+  const resume = existing.data?.status === "disconnected";
   const res = existing.data
-    ? await db().from("inboxes").update({ refresh_token_enc: tokenEnc, status: "paused", paused_reason: "Reconnected. Check the settings, then resume." }).eq("id", existing.data.id)
+    ? await db()
+        .from("inboxes")
+        .update(resume ? { refresh_token_enc: tokenEnc, status: "active", paused_reason: null } : { refresh_token_enc: tokenEnc, status: "paused", paused_reason: "Reconnected. Check the settings, then resume." })
+        .eq("id", existing.data.id)
     : await db().from("inboxes").insert({ email, refresh_token_enc: tokenEnc, status: "paused", paused_reason: "New inbox. Set the sender name, signature and cold start date, then resume." });
   if (res.error) return fail(res.error.message);
   redirect(`/inboxes?connected=${encodeURIComponent(email)}`);

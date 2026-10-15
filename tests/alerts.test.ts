@@ -63,8 +63,9 @@ describe("alerts", () => {
     expect(broken.status).toBe("disconnected");
     expect(out.alert).toMatchObject({ sent: true, from: store.inboxes[1].email });
     const alert = mailer.sent.find((m) => header(m.raw, "To") === "owner@example.com")!;
-    expect(header(alert.raw, "Subject")).toBe(`[Outreach CRM] ${broken.email} is disconnected`);
+    expect(header(alert.raw, "Subject")).toBe(`[Outreach CRM] Reconnect ${broken.email}, it stopped sending`);
     expect(bodyOf(alert.raw)).toContain(`${APP}/inboxes`);
+    expect(bodyOf(alert.raw)).toContain("click Reconnect");
 
     // Still disconnected on the next pass: no repeat alert.
     expect((await runTick(store, deps, APP)).alert.sent).toBe(false);
