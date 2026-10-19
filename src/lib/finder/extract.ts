@@ -46,6 +46,7 @@ function unObfuscate(text: string): string {
 }
 
 const EMAIL_IN_TEXT = /[a-z0-9][a-z0-9._%+-]*@[a-z0-9-]+(?:\.[a-z0-9-]+)+/gi;
+const PLAIN_LOCAL = /^[a-z0-9][a-z0-9._+-]*$/;
 const FILE_TLD = /\.(png|jpe?g|gif|webp|svg|bmp|ico|css|js|json|pdf|mp4|webm|woff2?|ttf)$/;
 const DEPT_WORDS = new Set(["ops", "import", "imports", "export", "exports", "sea", "air", "ocean", "customs", "logistics", "team", "sales", "info", "admin", "support", "service", "office", "contact", "accounts", "usa", "us"]);
 
@@ -93,8 +94,11 @@ export function extractEmails(html: string, siteDomains: string[]): FoundEmail[]
   const out: FoundEmail[] = [];
   const seen = new Set<string>();
   for (const r of raw) {
-    const email = r.trim().toLowerCase().replace(/^mailto:/, "").replace(/[.,;:]+$/, "");
-    if (seen.has(email) || !isValidSyntax(email) || FILE_TLD.test(email)) continue;
+    let email = r;
+    try { email = decodeURIComponent(email); } catch { /* keep as is */ }
+    // "mailto://jon@x.com" and "jon%20@x.com" show up on real sites; keep only the address itself.
+    email = email.toLowerCase().replace(/^\s*mailto:/, "").replace(/\s+/g, "").replace(/^[^a-z0-9]+/, "").replace(/[.,;:]+$/, "");
+    if (seen.has(email) || !isValidSyntax(email) || !PLAIN_LOCAL.test(email.split("@")[0]) || FILE_TLD.test(email)) continue;
     const domain = email.split("@")[1];
     if (!belongsTo(domain, siteDomains) || isFreemailDomain(domain)) continue;
     if (/^[0-9a-f]{16,}$/.test(email.split("@")[0])) continue;

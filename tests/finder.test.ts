@@ -24,6 +24,14 @@ describe("website email finder", () => {
     expect(found.find((f) => f.email === "sales@acmeimports.com")).toMatchObject({ first_name: "", last_name: "" });
   });
 
+  it("cleans mailto:// and %20 junk instead of saving it as an address", () => {
+    const html = `<a href="mailto://ahirth@centuryac.com">Email</a> <a href="mailto:jon%20@logos.com">Jon</a>
+      <a href="mailto:%20sales@centuryac.com">Sales</a> <p>weird/x@centuryac.com</p>`;
+    expect(extractEmails(html, ["centuryac.com", "logos.com"]).map((f) => f.email).sort()).toEqual(
+      ["ahirth@centuryac.com", "jon@logos.com", "sales@centuryac.com", "x@centuryac.com"],
+    );
+  });
+
   it("decodes Cloudflare email protection", () => {
     expect(decodeCfEmail(cf("a.b@c.com", 0x13))).toBe("a.b@c.com");
     expect(decodeCfEmail("zz")).toBe("");
