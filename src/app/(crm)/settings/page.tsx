@@ -17,7 +17,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <div><label>Company name</label><input type="text" name="company_name" defaultValue={s.company_name} placeholder="ABC Cargo" /></div>
           <div><label>Postal address</label><input type="text" name="postal_address" defaultValue={s.postal_address} placeholder="Street, City, State ZIP, Country" /></div>
         </div>
-        <label>Opt-out line (the unsubscribe link is added after it)</label>
+        <label>Opt-out line (no link by default; write {"{{unsubscribe_link}}"} where one should go)</label>
         <input type="text" name="opt_out_line" defaultValue={s.opt_out_line} />
 
         <h2 style={{ marginTop: 22 }}>Who to email</h2>

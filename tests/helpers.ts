@@ -16,7 +16,10 @@ export class FakeMailer implements Mailer {
     return { messageId: `gm-${n}`, threadId: threadId ?? `thread-${n}`, rfcMessageId: `<msg-${n}@mail.gmail.com>` };
   }
 
-  async listInbound(inbox: Inbox): Promise<FetchedMessage[]> {
+  listed: { inbox: string; since: Date; spamOnly: boolean }[] = [];
+
+  async listInbound(inbox: Inbox, since: Date, opts?: { spamOnly?: boolean }): Promise<FetchedMessage[]> {
+    this.listed.push({ inbox: inbox.email, since, spamOnly: opts?.spamOnly ?? false });
     return this.inbound[inbox.email] ?? [];
   }
 }

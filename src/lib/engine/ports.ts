@@ -31,7 +31,8 @@ export class MailerError extends Error {
 
 export interface Mailer {
   send(inbox: Inbox, rawMessage: string, threadId: string | null): Promise<SentMessage>;
-  listInbound(inbox: Inbox, since: Date): Promise<FetchedMessage[]>;
+  /** New mail since a time, Spam folder included (replies can land there). `spamOnly` reads just the Spam folder. */
+  listInbound(inbox: Inbox, since: Date, opts?: { spamOnly?: boolean }): Promise<FetchedMessage[]>;
   /** The message body as plain text, for auto-replies that name other addresses. */
   getText?(inbox: Inbox, messageId: string): Promise<string>;
 }
