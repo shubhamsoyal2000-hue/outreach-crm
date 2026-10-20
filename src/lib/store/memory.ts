@@ -7,7 +7,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sending_enabled: false,
   company_name: "",
   postal_address: "",
-  opt_out_line: "Not the right person or not interested? Click here and I won't email again:",
+  opt_out_line: "Not the right person, or rather not hear from us? Just reply \"no\" and I won't email again.",
   allow_shared_inboxes: false,
   alert_email: "",
   default_timezone: "America/New_York",

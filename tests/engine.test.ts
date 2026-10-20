@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runSendPass } from "@/lib/engine/send";
-import { runSyncPass } from "@/lib/engine/sync";
+import { runSyncPass, syncInbox } from "@/lib/engine/sync";
 import { enrollContacts } from "@/lib/engine/enroll";
 import { runAutoEnroll } from "@/lib/engine/auto-enroll";
 import { MailerError } from "@/lib/engine/ports";
@@ -44,7 +44,8 @@ describe("send pass", () => {
     expect(body).toContain("Hi Jane,"); // name tidied from JANE
     expect(body).toContain("Acme Imports bringing furniture into Savannah");
     expect(body).toContain("123 Main St, Suite 4, Newark, NJ 07102");
-    expect(body).toContain("won't email again: https://crm.example.com/unsubscribe");
+    expect(body).toContain('Just reply "no" and I won\'t email again.');
+    expect(body).not.toContain("http"); // links in cold mail push it toward Spam
 
     // Follow-up waits 3 business days and lands inside the 9-16 window.
     expect(e.next_step).toBe(2);
@@ -329,6 +330,33 @@ describe("sync pass", () => {
     expect(eJane).toMatchObject({ status: "stopped", stop_reason: "replied" });
     expect(eBob).toMatchObject({ status: "stopped", stop_reason: "company_replied" });
     expect(store.companies.find((c) => c.id === company.id)!.status).toBe("replied");
+  });
+
+  it("the old click-here opt-out line becomes the reply-no line", async () => {
+    const { composeEmail } = await import("@/lib/compose");
+    const ctx = setup();
+    const company = addCompany(ctx.store);
+    const contact = addContact(ctx.store, company, { email: "jane@acme.com" });
+    const settings = { company_name: "Cargo Solution", postal_address: "1 Main St", opt_out_line: "Not the right person or not interested? Click here and I won't email again:" };
+    const inbox = { email: "a@b.com", sender_name: "Marcus", signature: "" };
+    const out = composeEmail({ settings, inbox, contact, company, enrollment: { subject_variant: "a", thread_subject: null, gmail_thread_id: null }, step: { step_number: 1, delay_business_days: 0, subject_a: "hi", subject_b: null, body: "Hello" }, unsubscribeUrl: "https://x/u" } as Parameters<typeof composeEmail>[0]);
+    expect(out.ok && out.body).toContain('Just reply "no"');
+    expect(out.ok && out.body).not.toContain("Click here");
+  });
+
+  it("a Spam-folder lookback handles a missed reply without moving the sync point", async () => {
+    const { store, deps, mailer, eJane } = await sentOnce();
+    const inbox = (await store.listInboxes())[0];
+    await store.updateInbox(inbox.id, { last_synced_at: "2026-10-20T15:00:00.000Z" });
+    mailer.inbound[inbox.email] = [inbound({})];
+    const since = new Date("2026-10-05T00:00:00Z");
+    const out = await syncInbox(store, deps, await store.getSettings(), (await store.listInboxes())[0], { since, spamOnly: true });
+    expect(out.replies).toBe(1);
+    expect(eJane.status).toBe("stopped");
+    expect(mailer.listed.at(-1)).toMatchObject({ since, spamOnly: true });
+    expect((await store.listInboxes())[0].last_synced_at).toBe("2026-10-20T15:00:00.000Z");
+    // Running it again records nothing new.
+    expect((await syncInbox(store, deps, await store.getSettings(), (await store.listInboxes())[0], { since, spamOnly: true })).replies).toBe(0);
   });
 
   it("a colleague replying from another address also stops the company", async () => {

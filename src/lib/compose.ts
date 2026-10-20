@@ -42,10 +42,21 @@ export function templateVars(contact: Contact, company: Company | null, inbox: P
 
 /**
  * Renders one step into the final plain-text email: the step's copy, the
- * sender's signature, the opt-out line with its link, and the postal address
- * CAN-SPAM requires. A follow-up with no subject of its own replies in the
+ * sender's signature, the opt-out line, and the postal address CAN-SPAM
+ * requires. The body carries no link unless the opt-out line asks for one with
+ * {{unsubscribe_link}}: links (above all to a shared vercel.app address) push cold
+ * mail into Spam, and a reply opts out just as well. The one-click unsubscribe
+ * stays in the List-Unsubscribe header. A follow-up with no subject of its own replies in the
  * same thread with "Re: <first subject>".
  */
+const OLD_OPT_OUT_LINE = "Not the right person or not interested? Click here and I won't email again:";
+const OPT_OUT_LINE = "Not the right person, or rather not hear from us? Just reply \"no\" and I won't email again.";
+
+/** The old default asked people to click a link that is no longer added. */
+function optOutLine(line: string): string {
+  return line.trim() === OLD_OPT_OUT_LINE ? OPT_OUT_LINE : line.trim();
+}
+
 export function composeEmail(input: ComposeInput): Composed {
   const { settings, inbox, contact, company, enrollment, step } = input;
   const vars = templateVars(contact, company, inbox);
@@ -69,7 +80,7 @@ export function composeEmail(input: ComposeInput): Composed {
   // The inbox signature normally starts with the sender's name; without one, the name alone signs off.
   const signature = inbox.signature.trim() || inbox.sender_name;
   const footer = [
-    `${settings.opt_out_line.trim()} ${input.unsubscribeUrl}`,
+    optOutLine(settings.opt_out_line).replace(/\{\{\s*unsubscribe_link\s*\}\}/g, input.unsubscribeUrl),
     [settings.company_name, settings.postal_address].filter((s) => s.trim()).join(", "),
   ].join("\n");
 

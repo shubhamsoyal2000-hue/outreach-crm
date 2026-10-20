@@ -152,15 +152,17 @@ export const gmailMailer: Mailer = {
     });
   },
 
-  async listInbound(inbox, since): Promise<FetchedMessage[]> {
+  async listInbound(inbox, since, opts): Promise<FetchedMessage[]> {
     return withToken(inbox, async (token) => {
-      const q = `after:${Math.floor(since.getTime() / 1000)} -in:sent -in:drafts -in:chats`;
+      const after = `after:${Math.floor(since.getTime() / 1000)}`;
+      // Gmail leaves Spam out of searches unless asked, and a prospect's reply can be filed there.
+      const q = opts?.spamOnly ? `${after} in:spam` : `${after} -in:sent -in:drafts -in:chats -in:trash`;
       const ids: string[] = [];
       let pageToken: string | undefined;
       do {
         const page = await gmail<{ messages?: { id: string }[]; nextPageToken?: string }>(
           token,
-          `/messages?maxResults=100&q=${encodeURIComponent(q)}${pageToken ? `&pageToken=${pageToken}` : ""}`,
+          `/messages?maxResults=100&includeSpamTrash=true&q=${encodeURIComponent(q)}${pageToken ? `&pageToken=${pageToken}` : ""}`,
         );
         ids.push(...(page.messages ?? []).map((m) => m.id));
         pageToken = page.nextPageToken;

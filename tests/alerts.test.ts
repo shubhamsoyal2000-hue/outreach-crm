@@ -54,9 +54,9 @@ describe("alerts", () => {
     const { store, deps, mailer } = await sentOnce();
     const broken = store.inboxes[0];
     const realList = mailer.listInbound.bind(mailer);
-    mailer.listInbound = async (inbox) => {
+    mailer.listInbound = async (inbox, since, opts) => {
       if (inbox.id === broken.id) throw new MailerError("auth", "invalid_grant");
-      return realList(inbox);
+      return realList(inbox, since, opts);
     };
 
     const out = await runTick(store, deps, APP);

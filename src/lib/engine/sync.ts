@@ -60,17 +60,29 @@ async function handleSenderBlocked(store: Store, inbox: Inbox, enrollment: Enrol
   }
 }
 
-export async function syncInbox(store: Store, deps: EngineDeps, settings: Settings, inbox: Inbox): Promise<SyncOutcome> {
+/**
+ * `lookback` re-reads mail from an earlier time (only the Spam folder when `spamOnly`)
+ * without moving the inbox's sync point; mail already recorded is skipped as usual.
+ */
+export async function syncInbox(
+  store: Store,
+  deps: EngineDeps,
+  settings: Settings,
+  inbox: Inbox,
+  lookback?: { since: Date; spamOnly?: boolean },
+): Promise<SyncOutcome> {
   const out: SyncOutcome = { inbox: inbox.email, replies: 0, notMonitored: 0, referred: 0, newReplies: [], bounces: 0, autoReplies: 0, optOuts: 0 };
   if (inbox.status === "disconnected" || !inbox.refresh_token_enc) return out;
   const now = deps.now();
-  const since = inbox.last_synced_at
+  const since = lookback
+    ? lookback.since
+    : inbox.last_synced_at
     ? new Date(new Date(inbox.last_synced_at).getTime() - OVERLAP_MS)
     : new Date(now.getTime() - FIRST_SYNC_LOOKBACK_MS);
 
   let messages;
   try {
-    messages = await deps.mailer.listInbound(inbox, since);
+    messages = await deps.mailer.listInbound(inbox, since, lookback?.spamOnly ? { spamOnly: true } : undefined);
   } catch (err) {
     out.error = err instanceof Error ? err.message : String(err);
     if (err instanceof MailerError && err.code === "auth") {
@@ -162,7 +174,7 @@ export async function syncInbox(store: Store, deps: EngineDeps, settings: Settin
     }
   }
 
-  await store.updateInbox(inbox.id, { last_synced_at: now.toISOString() });
+  if (!lookback) await store.updateInbox(inbox.id, { last_synced_at: now.toISOString() });
   return out;
 }
 
