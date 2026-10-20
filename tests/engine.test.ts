@@ -332,6 +332,18 @@ describe("sync pass", () => {
     expect(store.companies.find((c) => c.id === company.id)!.status).toBe("replied");
   });
 
+  it("the old click-here opt-out line becomes the reply-no line", async () => {
+    const { composeEmail } = await import("@/lib/compose");
+    const ctx = setup();
+    const company = addCompany(ctx.store);
+    const contact = addContact(ctx.store, company, { email: "jane@acme.com" });
+    const settings = { company_name: "Cargo Solution", postal_address: "1 Main St", opt_out_line: "Not the right person or not interested? Click here and I won't email again:" };
+    const inbox = { email: "a@b.com", sender_name: "Marcus", signature: "" };
+    const out = composeEmail({ settings, inbox, contact, company, enrollment: { subject_variant: "a", thread_subject: null, gmail_thread_id: null }, step: { step_number: 1, delay_business_days: 0, subject_a: "hi", subject_b: null, body: "Hello" }, unsubscribeUrl: "https://x/u" } as Parameters<typeof composeEmail>[0]);
+    expect(out.ok && out.body).toContain('Just reply "no"');
+    expect(out.ok && out.body).not.toContain("Click here");
+  });
+
   it("a Spam-folder lookback handles a missed reply without moving the sync point", async () => {
     const { store, deps, mailer, eJane } = await sentOnce();
     const inbox = (await store.listInboxes())[0];
