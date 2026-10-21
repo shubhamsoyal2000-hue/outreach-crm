@@ -58,10 +58,20 @@ export function isNotMonitored(text: string): boolean {
 
 const OPT_OUT = /\b(unsubscribe|remove me|take me off|stop (emailing|e-mailing|sending|contacting)|do not (email|contact)|don'?t (email|contact)|no longer interested|opt[- ]?out|not interested,? (please )?(remove|stop))\b/i;
 
+// Gmail snippets come HTML-escaped ("couldn&#39;t"), which would hide words from the patterns above.
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
 export function classifyInbound(msg: InboundMessage): Classification {
   const from = parseAddress(msg.from);
   const h = msg.headers;
-  const text = `${msg.subject}\n${msg.snippet}`;
+  const text = decodeEntities(`${msg.subject}\n${msg.snippet}`);
 
   const isBounce =
     BOUNCE_SENDERS.test(from) ||
