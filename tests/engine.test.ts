@@ -377,6 +377,18 @@ describe("sync pass", () => {
     expect(await store.isSuppressed(jane.email)).toBe(true);
   });
 
+  it("a recipient-side refusal stops the contact without counting as a bounce", async () => {
+    const { store, deps, mailer, jane, eJane } = await sentOnce();
+    mailer.inbound["sender0@getabccargo.com"] = [
+      inbound({ from: "postmaster@acme.com", subject: "Undeliverable: hello", snippet: "Delivery has failed to these recipients or groups: jane@acme.com Delivery not authorized, message refused", headers: { "x-failed-recipients": "jane@acme.com" } }),
+    ];
+    const [out] = await runSyncPass(store, deps);
+    expect(out.bounces).toBe(0);
+    expect(eJane.stop_reason).toBe("bounced");
+    expect(await store.isSuppressed(jane.email)).toBe(true);
+    expect(store.messages.some((m) => m.kind === "bounce")).toBe(false);
+  });
+
   it("Gmail refusing to send pauses the inbox and keeps the address", async () => {
     const { store, deps, mailer, jane, eJane } = await sentOnce();
     mailer.inbound["sender0@getabccargo.com"] = [

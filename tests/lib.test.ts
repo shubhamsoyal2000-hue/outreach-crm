@@ -91,6 +91,18 @@ describe("classification", () => {
     const delay = classifyInbound({ ...base, from: "mailer-daemon@googlemail.com", subject: "Delivery Status Notification (Delay)", snippet: "Message delayed, will retry" });
     expect(delay).toMatchObject({ kind: "bounce", hardBounce: false });
   });
+
+  it("does not treat a full mailbox or a recipient-side refusal as a bad address", () => {
+    const daemon = { ...base, from: "postmaster@example.cn", subject: "Undeliverable" };
+    const full = classifyInbound({ ...daemon, snippet: "很抱歉，您发送的邮件被退回。 退信原因： 邮件大小超过对方服务器的上限或收件方邮箱已满" });
+    expect(full).toMatchObject({ kind: "bounce", hardBounce: false });
+    const forwarded = classifyInbound({ ...daemon, snippet: "Your email couldn't be forwarded from support@premiumguard.com to another email address. Your message wasn't delivered." });
+    expect(forwarded).toMatchObject({ kind: "bounce", hardBounce: false, recipientRefused: true });
+    const policy = classifyInbound({ ...daemon, snippet: "Delivery has failed to these recipients or groups: cc@aurobindo.com Delivery not authorized, message refused" });
+    expect(policy).toMatchObject({ kind: "bounce", hardBounce: false, recipientRefused: true });
+    const missing = classifyInbound({ ...daemon, snippet: "Address not found. The domain meadowswye.com couldn't be found." });
+    expect(missing).toMatchObject({ kind: "bounce", hardBounce: true });
+  });
 });
 
 describe("mime", () => {

@@ -16,6 +16,8 @@ export interface Classification {
   hardBounce?: boolean;
   /** For bounces: Gmail itself refused to send ("Message rejected"), so the inbox is the problem, not the address. */
   senderBlocked?: boolean;
+  /** For bounces: the address exists but the recipient's side refused it (their own forwarding broke, or their admin only takes mail from approved senders). */
+  recipientRefused?: boolean;
   /** For auto-replies: the mailbox is no longer read (closed, person left), or it sends us to another address. */
   notMonitored?: boolean;
 }
@@ -30,7 +32,10 @@ const BOUNCE_SUBJECT = /(delivery status notification|undeliverable|undelivered 
 // Gmail's own refusal to send ("Message blocked ... The response was: Message rejected"),
 // usually because it reads the email as bulk or spam. The recipient never saw it.
 const SENDER_BLOCKED = /(the response was: message rejected|support\.google\.com\/mail\/(answer\/69585|\?p=UnsolicitedMessageError))/i;
-const SOFT_BOUNCE = /(\(delay\)|delayed|temporar|try again later|will retry|mailbox (is )?full|over quota|4\.\d\.\d)/i;
+const SOFT_BOUNCE = /(\(delay\)|delayed|temporar|try again later|will retry|mailbox (is )?full|over quota|4\.\d\.\d|邮箱已满|邮箱空间不足|超过对方服务器的上限|容量不足)/i;
+// Not a bad address and not our reputation: the recipient's own forwarding failed, or their admin
+// lets only approved senders in. Stop emailing them, but don't count it against the inbox.
+const RECIPIENT_REFUSED = /(couldn'?t be forwarded|could not be forwarded|delivery not authori[sz]ed|has restricted who can send|only accepts? (e-?mail|messages) from|not authori[sz]ed to send to this (group|recipient))/i;
 const HARD_BOUNCE = /(address not found|does not exist|no such user|user unknown|recipient (address )?rejected|invalid (recipient|address|mailbox)|mailbox unavailable|5\.[0-7]\.\d+|couldn'?t be found|not found)/i;
 
 const AUTO_SUBJECT = /^(automatic reply|auto(matic)?[- ]?reply|auto:|out of (the )?office|ooo\b|away from (the )?office|on vacation|on leave|autoreply|i am out|i'm out|currently out|r[ée]ponse automatique|respuesta autom[aá]tica|risposta automatica|automatische antwort|abwesenheit|resposta autom[aá]tica)/i;
@@ -67,6 +72,7 @@ export function classifyInbound(msg: InboundMessage): Classification {
     const failed = h["x-failed-recipients"]?.split(",")[0]?.trim().toLowerCase();
     const hard = !SOFT_BOUNCE.test(text) || HARD_BOUNCE.test(text);
     if (SENDER_BLOCKED.test(text)) return { kind: "bounce", failedRecipient: failed || undefined, hardBounce: false, senderBlocked: true };
+    if (RECIPIENT_REFUSED.test(text)) return { kind: "bounce", failedRecipient: failed || undefined, hardBounce: false, recipientRefused: true };
     return { kind: "bounce", failedRecipient: failed || undefined, hardBounce: hard && !/\(delay\)/i.test(msg.subject) };
   }
 

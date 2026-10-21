@@ -114,7 +114,7 @@ export async function syncInbox(
       enrollment_id: enrollment?.id ?? null,
       contact_id: contact?.id ?? null,
       direction: "inbound",
-      // Soft bounces (mailbox full, delayed) are logged but do not count against the inbox.
+      // Soft bounces (mailbox full, delayed) and recipient-side refusals are logged but do not count against the inbox.
       kind: cls.kind === "bounce" && !cls.hardBounce ? "other" : cls.kind,
       gmail_message_id: msg.id,
       gmail_thread_id: msg.threadId,
@@ -129,6 +129,11 @@ export async function syncInbox(
       case "bounce":
         if (cls.senderBlocked) {
           await handleSenderBlocked(store, inbox, enrollment, now);
+          break;
+        }
+        if (cls.recipientRefused && contact) {
+          await store.addSuppression({ email: contact.email, reason: "bounce", note: `refused by recipient: ${msg.snippet.slice(0, 180)}` });
+          await store.stopContactEnrollments(contact.id, "bounced");
           break;
         }
         if (!cls.hardBounce || !contact) break;
