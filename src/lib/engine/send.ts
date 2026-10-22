@@ -297,7 +297,6 @@ export async function runSendPass(store: Store, deps: EngineDeps): Promise<SendO
   const blocked = globalBlock(settings);
   if (blocked) return [{ inbox: "*", result: "skipped", reason: blocked }];
   const inboxes = await store.listInboxes();
-  const outcomes: SendOutcome[] = [];
-  for (const inbox of inboxes) outcomes.push(await runInboxSend(store, deps, settings, inbox));
-  return outcomes;
+  // Each company is pinned to one inbox, so inboxes can send side by side.
+  return Promise.all(inboxes.map((inbox) => runInboxSend(store, deps, settings, inbox)));
 }

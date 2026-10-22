@@ -236,7 +236,7 @@ async function holdEnrollment(
 export async function runSyncPass(store: Store, deps: EngineDeps): Promise<SyncOutcome[]> {
   const settings = await store.getSettings();
   const inboxes = await store.listInboxes();
-  const outcomes: SyncOutcome[] = [];
-  for (const inbox of inboxes) outcomes.push(await syncInbox(store, deps, settings, inbox));
-  return outcomes;
+  // Inboxes are independent, so read them side by side: one by one, a slow Gmail
+  // day pushed the whole tick past its time limit and the sends after it never ran.
+  return Promise.all(inboxes.map((inbox) => syncInbox(store, deps, settings, inbox)));
 }

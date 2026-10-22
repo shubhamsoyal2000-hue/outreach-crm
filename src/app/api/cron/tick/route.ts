@@ -5,7 +5,8 @@ import { runTick } from "@/lib/engine/tick";
 import { SupabaseStore } from "@/lib/store/supabase";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// The scheduler stops waiting after 55s; a slower tick still gets to finish its sends.
+export const maxDuration = 120;
 
 /** Called every 5 minutes by the scheduler (see README). */
 async function tick(request: Request) {
