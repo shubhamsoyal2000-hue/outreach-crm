@@ -27,6 +27,7 @@ export function parseAddress(from: string): string {
   return (m ? m[1] : from).trim().toLowerCase();
 }
 
+const NO_REPLY_SENDER = /^(no-?reply|do-?not-?reply|newsletters?|marketing|news|promotions?|deals|offers)([._+-][^@]*)?@/i;
 const BOUNCE_SENDERS = /^(mailer-daemon|postmaster|mail-daemon|mailerdaemon)@/;
 const BOUNCE_SUBJECT = /(delivery status notification|undeliverable|undelivered mail|delivery failure|returned mail|mail delivery (failed|subsystem)|failure notice|could not be delivered)/i;
 // Gmail's own refusal to send ("Message blocked ... The response was: Message rejected"),
@@ -100,6 +101,10 @@ export function classifyInbound(msg: InboundMessage): Classification {
     const elsewhere = isNotMonitored(text) || (REDIRECT.test(text) && EMAIL.test(text) && !TEMPORARY.test(text));
     return { kind: "auto_reply", ...(elsewhere ? { notMonitored: true } : {}) };
   }
+  // Newsletters and sale emails from a company we emailed are not answers to us.
+  const isReplySubject = /^(re|aw|sv|antw|r):/i.test(msg.subject.trim());
+  if (!isReplySubject && ("list-unsubscribe" in h || "list-id" in h || NO_REPLY_SENDER.test(from))) return { kind: "other" };
+
   // Some servers send "no longer monitored" notes without auto-reply headers; they are not real replies.
   if (!/^re:/i.test(msg.subject) || msg.snippet.length < 400) {
     if (isNotMonitored(text)) return { kind: "auto_reply", notMonitored: true };

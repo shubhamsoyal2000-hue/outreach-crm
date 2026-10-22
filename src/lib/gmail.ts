@@ -123,7 +123,7 @@ function partText(part: GmailPart | undefined, mime: string): string {
   return (part.parts ?? []).map((p) => partText(p, mime)).join("\n");
 }
 
-const METADATA_HEADERS = ["From", "Subject", "Message-ID", "Auto-Submitted", "Precedence", "X-Autoreply", "X-Autorespond", "X-Failed-Recipients", "Content-Type"];
+const METADATA_HEADERS = ["From", "Subject", "Message-ID", "Auto-Submitted", "Precedence", "X-Autoreply", "X-Autorespond", "X-Failed-Recipients", "Content-Type", "List-Unsubscribe", "List-Id"];
 
 function headerMap(m: GmailMessage): Record<string, string> {
   return Object.fromEntries((m.payload?.headers ?? []).map((h) => [h.name.toLowerCase(), h.value]));

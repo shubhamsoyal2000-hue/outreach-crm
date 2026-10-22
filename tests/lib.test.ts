@@ -92,6 +92,12 @@ describe("classification", () => {
     expect(delay).toMatchObject({ kind: "bounce", hardBounce: false });
   });
 
+  it("ignores newsletters and no-reply mail instead of counting them as replies", () => {
+    expect(classifyInbound({ ...base, from: "Bogg Bag <noreply@boggbag.com>", subject: "Halloween favorites", snippet: "Order today and your Halloween favorites arrive before the candy runs out." }).kind).toBe("other");
+    expect(classifyInbound({ ...base, subject: "Our fall catalog", headers: { "list-unsubscribe": "<mailto:u@acme.com>" } }).kind).toBe("other");
+    expect(classifyInbound({ ...base, subject: "Re: hello", headers: { "list-unsubscribe": "<mailto:u@acme.com>" } }).kind).toBe("reply");
+  });
+
   it("does not treat a full mailbox or a recipient-side refusal as a bad address", () => {
     const daemon = { ...base, from: "postmaster@example.cn", subject: "Undeliverable" };
     const full = classifyInbound({ ...daemon, snippet: "很抱歉，您发送的邮件被退回。 退信原因： 邮件大小超过对方服务器的上限或收件方邮箱已满" });
