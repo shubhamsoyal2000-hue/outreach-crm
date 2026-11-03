@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { displayCompanyName } from "@/lib/compose";
 import { classifyInbound } from "@/lib/classify";
 import { decrypt, encrypt, sign, unsign } from "@/lib/crypto";
 import { companyNameKey, domainFromWebsite, precheck } from "@/lib/email-rules";
@@ -240,5 +241,21 @@ describe("spin", () => {
     const { spin } = await import("@/lib/template");
     const outs = new Set(Array.from({ length: 20 }, (_, i) => spin("Quote it today [[|for you]].", `s${i}`)));
     expect(outs).toEqual(new Set(["Quote it today.", "Quote it today for you."]));
+  });
+});
+
+describe("displayCompanyName", () => {
+  it("drops names that are only the web address run together", () => {
+    expect(displayCompanyName("acme.com")).toBe("");
+    expect(displayCompanyName("Pipedistributorsinc", "pipedistributorsinc.com")).toBe("");
+    expect(displayCompanyName("BUDHAGIRL", "budhagirl.com")).toBe("");
+    expect(displayCompanyName("dmlumber", "www.dmlumber.com")).toBe("");
+  });
+  it("keeps real names", () => {
+    expect(displayCompanyName("Kuzco Lighting, Inc.", "kuzcolighting.com")).toBe("Kuzco Lighting, Inc.");
+    expect(displayCompanyName("PepsiCo", "pepsico.com")).toBe("PepsiCo");
+    expect(displayCompanyName("Virco Manufacturing", "virco.com")).toBe("Virco Manufacturing");
+    expect(displayCompanyName("Acme", "acmeimports.com")).toBe("Acme");
+    expect(displayCompanyName("Acme Imports")).toBe("Acme Imports");
   });
 });

@@ -17,10 +17,22 @@ export type Composed =
   | { ok: true; subject: string; body: string; newThread: boolean; /** The step's own wording, without signature or footer. */ copy: string }
   | { ok: false; missing: string[] };
 
-/** A company "name" that is only its web address (e.g. "acme.com") reads badly in an email, so the fallback is used instead. */
-function displayCompanyName(name: string | null | undefined): string {
+/**
+ * A company "name" that is only its web address reads badly in an email, so the
+ * fallback is used instead. That covers "acme.com", and also a name made from the
+ * domain with the words run together ("Pipedistributorsinc" for
+ * pipedistributorsinc.com). A one-word name kept with inner capitals ("PepsiCo")
+ * was typed by a person and is left alone.
+ */
+export function displayCompanyName(name: string | null | undefined, domain?: string | null): string {
   const n = (name ?? "").trim();
-  return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(n) ? "" : n;
+  if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(n)) return "";
+  const stem = (domain ?? "").trim().toLowerCase().replace(/^www\./, "").split(".")[0].replace(/[^a-z0-9]/g, "");
+  if (stem && !/\s/.test(n) && n.toLowerCase().replace(/[^a-z0-9]/g, "") === stem) {
+    const inner = n.slice(1);
+    if (inner === inner.toLowerCase() || n === n.toUpperCase()) return "";
+  }
+  return n;
 }
 
 export function templateVars(contact: Contact, company: Company | null, inbox: Pick<Inbox, "sender_name">) {
@@ -34,7 +46,7 @@ export function templateVars(contact: Contact, company: Company | null, inbox: P
     full_name: [first, last].filter(Boolean).join(" "),
     title: contact.title,
     email: contact.email,
-    company: displayCompanyName(company?.name ?? contact.fields.company),
+    company: displayCompanyName(company?.name ?? contact.fields.company, company?.domain),
     sender_name: inbox.sender_name,
     sender_first_name: inbox.sender_name.split(" ")[0],
   } as Record<string, string>;
