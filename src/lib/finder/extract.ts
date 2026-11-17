@@ -98,6 +98,8 @@ export function extractEmails(html: string, siteDomains: string[]): FoundEmail[]
     try { email = decodeURIComponent(email); } catch { /* keep as is */ }
     // "mailto://jon@x.com" and "jon%20@x.com" show up on real sites; keep only the address itself.
     email = email.toLowerCase().replace(/^\s*mailto:/, "").replace(/\s+/g, "").replace(/^[^a-z0-9]+/, "").replace(/[.,;:]+$/, "");
+    // "jon@www.acme.com" is the website's host, not a mail domain: it means jon@acme.com.
+    email = email.replace(/@www\./, "@");
     if (seen.has(email) || !isValidSyntax(email) || !PLAIN_LOCAL.test(email.split("@")[0]) || FILE_TLD.test(email)) continue;
     const domain = email.split("@")[1];
     if (!belongsTo(domain, siteDomains) || isFreemailDomain(domain)) continue;
