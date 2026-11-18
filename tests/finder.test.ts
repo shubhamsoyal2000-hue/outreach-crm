@@ -32,6 +32,13 @@ describe("website email finder", () => {
     );
   });
 
+  it("turns name@www.site.com into name@site.com and keeps one copy", () => {
+    const html = `<a href="mailto:ben@www.northernplumbing.com">Ben</a> <p>ben@northernplumbing.com, tim@www.northernplumbing.com</p>`;
+    expect(extractEmails(html, ["northernplumbing.com"]).map((f) => f.email).sort()).toEqual(
+      ["ben@northernplumbing.com", "tim@northernplumbing.com"],
+    );
+  });
+
   it("decodes Cloudflare email protection", () => {
     expect(decodeCfEmail(cf("a.b@c.com", 0x13))).toBe("a.b@c.com");
     expect(decodeCfEmail("zz")).toBe("");
